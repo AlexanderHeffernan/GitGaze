@@ -1,0 +1,18 @@
+.build/
+.swiftpm/
+.DS_Store
+*.xcodeproj/xcuserdata/
+
+# Review captures can contain private contribution data.
+/.amp/in/
+
+# Local credentials, signing identities, and notarisation configuration.
+.env
+.env.*
+!.env.example
+*.p12
+*.pfx
+*.key
+AuthKey_*.p8
+*.mobileprovision
+*.provisionprofile
