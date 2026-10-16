@@ -36,11 +36,11 @@ struct UpdateSettings: View {
                 Spacer()
                 Text(updates.version).font(.system(size: 10)).foregroundStyle(.secondary)
             }
-            Toggle("Check automatically", isOn: Binding(get: { updates.automatic }, set: updates.setAutomatic))
+            Toggle("Check automatically", isOn: Binding(get: { updates.automatic }, set: { updates.setAutomatic($0) }))
             HStack {
                 Text("Verified updates, installed in place.").font(.system(size: 10)).foregroundStyle(.secondary)
                 Spacer()
-                Button("Check now", action: updates.check).buttonStyle(QuietButtonStyle()).disabled(!updates.canCheck)
+                Button("Check now") { updates.check() }.buttonStyle(QuietButtonStyle()).disabled(!updates.canCheck)
             }
         }
     }
