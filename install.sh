@@ -31,8 +31,16 @@ if [ -e "$DEST" ]; then
 fi
 if pgrep -x GitGaze >/dev/null; then
     osascript -e 'tell application id "app.gitbar.mac" to quit'
+    for ((i=0; i<40; i++)); do
+        pgrep -x GitGaze >/dev/null || break
+        sleep 0.25
+    done
+    if pgrep -x GitGaze >/dev/null; then
+        echo 'GitGaze is still closing. Quit it before running the installer again.' >&2
+        exit 1
+    fi
 fi
 if [ -e "$DEST" ]; then mv "$DEST" "$STAGE/previous.app"; fi
 mv "$APP" "$DEST"
 echo "Installed $DEST. Future updates are available in Settings → Updates."
-open "$DEST"
+open -n "$DEST"

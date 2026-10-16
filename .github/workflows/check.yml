@@ -33,6 +33,21 @@ jobs:
         run: ./scripts/build.sh
       - name: Smoke test packaged app
         run: .build/GitGaze.app/Contents/MacOS/GitGaze --smoke-test
+      - name: Exercise live Git listener
+        run: |
+          set -euo pipefail
+          .build/GitGaze.app/Contents/MacOS/GitGaze --enable-push-detection &
+          PID=$!
+          trap 'kill "$PID" 2>/dev/null || true' EXIT
+          SOCKET="$HOME/Library/Caches/GitBar/push.sock"
+          for ((i=0; i<40; i++)); do
+            [ -S "$SOCKET" ] && break
+            sleep 0.25
+          done
+          test -S "$SOCKET"
+          git -c "trace2.eventTarget=af_unix:dgram:$SOCKET" status --porcelain >/dev/null
+          sleep 2
+          kill -0 "$PID"
 
   release:
     needs: macos

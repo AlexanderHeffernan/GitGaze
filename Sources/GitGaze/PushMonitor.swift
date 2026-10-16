@@ -44,8 +44,8 @@ final class PushMonitor {
         _ = fcntl(fd, F_SETFL, O_NONBLOCK)
         let reader = PushEventReader(fd: fd) { [weak self] in self?.onPush?() }
         let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: DispatchQueue(label: "app.gitbar.push-events", qos: .utility))
-        source.setEventHandler { reader.read() }
-        source.setCancelHandler { close(fd) }
+        source.setEventHandler { @Sendable in reader.read() }
+        source.setCancelHandler { @Sendable in close(fd) }
         self.source = source
         source.resume()
     }
