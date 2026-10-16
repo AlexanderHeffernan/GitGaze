@@ -1,23 +1,25 @@
-# Contributing to GitGlaze
+# Contributing to GitGaze
 
 Small, native, private, and motivating is the goal. Bug fixes, accessibility improvements, and focused additions are welcome. Discuss substantial product changes in an issue before building them.
 
 ## Project layout
 
-- `Sources/GitGlaze/`: AppKit menu-bar lifecycle, SwiftUI components and widgets, preferences, CLI authentication, and local push detection.
-- `Sources/GitGlazeCore/`: contribution calculations, GitHub GraphQL reads, and Trace2 push-event parsing.
-- `Tests/GitGlazeCoreTests/`: public-behaviour tests for calendars, streaks, records, yearly comparisons, celebrations, and push events.
+- `Sources/GitGaze/`: AppKit menu-bar lifecycle, SwiftUI components and widgets, preferences, CLI authentication, local push detection, and Sparkle update settings.
+- `Sources/GitGazeCore/`: contribution calculations, GitHub GraphQL reads, and Trace2 push-event parsing.
+- `Tests/GitGazeCoreTests/`: public-behaviour tests for calendars, streaks, records, yearly comparisons, celebrations, and push events.
 - `scripts/`: app packaging, generated icon, and debug-only native UI review.
 - `Info.plist`: app metadata. The legacy `app.gitbar.mac` identity and `GitBar` data/socket paths are deliberate compatibility identifiers; do not casually rename them.
 
-Use Xcode 16+ with Swift 6 selected on macOS 14+. There are no third-party package dependencies.
+Use Xcode 16+ with Swift 6 selected on macOS 14+. Sparkle is the only third-party package dependency; its exact version and binary-artifact checksum are pinned through SwiftPM. Preserve its bundled licences when packaging.
 
 ## Before submitting a change
 
 ```sh
 swift test
 swift test -c release
+python3 -m unittest discover -s scripts -p 'test_*.py'
 ./scripts/build.sh
+.build/GitGaze.app/Contents/MacOS/GitGaze --smoke-test
 ```
 
 Keep changes focused and use shared controls so widgets and Settings stay consistent. Add regression coverage for observable behaviour rather than implementation details. Contribution counts must continue to come from GitHub's API calendar; a successful push is only a refresh hint. Do not add repository write access just to display activity.
@@ -42,4 +44,4 @@ Artifacts and temporary frame captures go under `.amp/in/`, which is ignored. Th
 
 ## Distribution
 
-The default build is ad-hoc signed for local development. Building successfully is not proof that a downloadable app will pass Gatekeeper. A release needs Developer ID signing, notarisation, and first-run checks on another Mac, including CLI connection, optional login items, and notification permission. CI does not publish releases.
+The default build is ad-hoc signed. Building successfully is not proof that a downloadable app will pass Gatekeeper. Successful `main` pushes publish signed Sparkle updates automatically after CI passes. Developer ID signing/notarisation is enabled separately through repository configuration; see [RELEASING.md](docs/RELEASING.md). First-run, optional login items, notifications, and installed updates should also be checked on a separate Mac. Never casually replace the Sparkle public key: existing installations trust it.

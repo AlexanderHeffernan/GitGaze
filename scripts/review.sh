@@ -7,7 +7,7 @@ mkdir -p "$OUT"
 osascript -e 'tell application id "app.gitbar.mac" to quit' 2>/dev/null || true
 CONFIGURATION=debug "$ROOT/scripts/build.sh"
 rm -f "$OUT/review-complete.txt"
-open "$ROOT/.build/GitGlaze.app" --args --review "$OUT" --show
+open "$ROOT/.build/GitGaze.app" --args --review "$OUT" --show
 capture() {
     name="$1"
     marker="$OUT/$name.png.window"

@@ -1,6 +1,6 @@
 import Foundation
 import Darwin
-import GitGlazeCore
+import GitGazeCore
 
 /// Git writes datagrams to a user-private socket. No hooks, repository access or raw trace logs.
 @MainActor
@@ -8,7 +8,7 @@ final class PushMonitor {
     private var source: DispatchSourceRead?
     private var lock: Int32 = -1
     var onPush: (() -> Void)?
-    // Stable path: existing opt-in Trace2 configurations must survive the GitGlaze rename.
+    // Stable path: existing opt-in Trace2 configurations must survive app renames.
     static var directory: URL {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("GitBar", isDirectory: true)
     }
@@ -23,7 +23,7 @@ final class PushMonitor {
         lock = open(Self.directory.appendingPathComponent("listener.lock").path, O_CREAT | O_RDWR | O_CLOEXEC, 0o600)
         guard lock >= 0, flock(lock, LOCK_EX | LOCK_NB) == 0 else {
             if lock >= 0 { close(lock); lock = -1 }
-            throw LoginError.message("Another GitGlaze push listener is already running.")
+            throw LoginError.message("Another GitGaze push listener is already running.")
         }
         let fd = socket(AF_UNIX, SOCK_DGRAM, 0)
         guard fd >= 0 else { stop(); throw LoginError.message("Couldn't create the Git push listener.") }
@@ -67,7 +67,7 @@ final class PushMonitor {
             .split(separator: "\n").map(String.init)
         if enabled {
             guard existing.isEmpty || existing == [Self.target] else {
-                throw LoginError.message("Git already has a Trace2 event target. GitGlaze left it unchanged.")
+                throw LoginError.message("Git already has a Trace2 event target. GitGaze left it unchanged.")
             }
             try start()
             do {

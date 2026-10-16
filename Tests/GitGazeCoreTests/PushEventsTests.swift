@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-import GitGlazeCore
+import GitGazeCore
 
 struct PushEventsTests {
     @Test func detectsSuccessfulPushNotFetchFailureOrChildCompletion() {

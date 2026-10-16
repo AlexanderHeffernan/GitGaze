@@ -1,10 +1,10 @@
 import AppKit
 import SwiftUI
 import Combine
-import GitGlazeCore
+import GitGazeCore
 
 @main
-struct GitGlazeApp {
+struct GitGazeApp {
     @MainActor static func main() {
         let app = NSApplication.shared
         let delegate = AppDelegate()
@@ -38,6 +38,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         store.changed = { [weak self] in self?.updateStatus() }
         cancellable = store.objectWillChange.sink { [weak self] in Task { @MainActor in self?.updateStatus() } }
         updateStatus()
+        if CommandLine.arguments.contains("--smoke-test") {
+            print("GitGaze launch smoke test passed")
+            NSApp.terminate(nil)
+            return
+        }
+        if !CommandLine.arguments.contains("--review") { store.updates.start() }
         Task {
             if CommandLine.arguments.contains("--enable-push-detection") { store.enablePushDetection(true) }
             await store.start()
@@ -57,10 +63,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     @objc private func togglePopover() {
         if NSApp.currentEvent?.type == .rightMouseUp {
             let menu = NSMenu()
-            menu.addItem(withTitle: "Open GitGlaze", action: #selector(showFromMenu), keyEquivalent: "")
+            menu.addItem(withTitle: "Open GitGaze", action: #selector(showFromMenu), keyEquivalent: "")
             menu.addItem(withTitle: "Refresh", action: #selector(refreshFromMenu), keyEquivalent: "r")
             menu.addItem(.separator())
-            menu.addItem(withTitle: "Quit GitGlaze", action: #selector(quit), keyEquivalent: "q")
+            let updates = menu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
+            updates.isEnabled = store.updates.canCheck
+            menu.autoenablesItems = false
+            menu.addItem(withTitle: "Quit GitGaze", action: #selector(quit), keyEquivalent: "q")
             for item in menu.items { item.target = self }
             if let button = statusItem.button { menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.maxY + 3), in: button) }
         } else if popover.isShown { popover.performClose(nil) }
@@ -68,6 +77,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
     @objc private func showFromMenu() { showPopover() }
     @objc private func refreshFromMenu() { store.refresh(force: true) }
+    @objc private func checkForUpdates() { store.updates.check() }
     @objc private func quit() { NSApp.terminate(nil) }
     private func showPopover() {
         guard let button = statusItem.button else { return }
@@ -96,7 +106,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         let width = view.fittingSize.width + 12
         statusItem.length = width
         view.frame = NSRect(x: 6, y: 0, width: width - 12, height: button.bounds.height)
-        button.toolTip = store.dashboard == nil ? "GitGlaze · Connect GitHub CLI" : "GitGlaze · \(store.stats?.todayCount ?? 0) contributions today · \(store.stats?.currentStreak ?? 0)-day streak · \((MenuStyle(rawValue: store.menuStyle) ?? .charge).detail)"
+        button.toolTip = store.dashboard == nil ? "GitGaze · Connect GitHub CLI" : "GitGaze · \(store.stats?.todayCount ?? 0) contributions today · \(store.stats?.currentStreak ?? 0)-day streak · \((MenuStyle(rawValue: store.menuStyle) ?? .charge).detail)"
         button.setAccessibilityLabel(button.toolTip)
         if let celebration = store.celebration, displayedCelebration != celebration.id {
             displayedCelebration = celebration.id
@@ -240,7 +250,7 @@ private struct MiniActivity: View {
                 for (index, value) in values.enumerated() {
                     let rect: CGRect
                     if style == "mosaic" { rect = CGRect(x: Double(index / 7) * 3, y: Double(index % 7) * 2.6, width: 2, height: 1.8) }
-                    else { rect = CGRect(x: Double(index) * size.width / 7, y: 0, width: size.width / 7 - 1, height: 3) }
+                    else { rect = CGRect(x: CGFloat(index) * size.width / 7, y: 0, width: size.width / 7 - 1, height: 3) }
                     context.fill(Path(roundedRect: rect, cornerRadius: 0.6), with: .color(value > 0 ? accent.opacity(0.4 + min(0.6, Double(value) / 20)) : .primary.opacity(0.22)))
                 }
             }

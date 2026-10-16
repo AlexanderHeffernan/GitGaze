@@ -1,5 +1,5 @@
 import SwiftUI
-import GitGlazeCore
+import GitGazeCore
 
 struct DashboardView: View {
     @ObservedObject var store: Store
@@ -43,7 +43,7 @@ struct DashboardView: View {
 
     private var header: some View {
         HStack(spacing: 4) {
-            Text(store.settings ? "Settings" : adding ? "Add widgets" : "GitGlaze").font(.system(size: 14, weight: .semibold)).tracking(-0.3)
+            Text(store.settings ? "Settings" : adding ? "Add widgets" : "GitGaze").font(.system(size: 14, weight: .semibold)).tracking(-0.3)
             Spacer()
             if store.settings || adding {
                 Button { store.settings = false; adding = false } label: {

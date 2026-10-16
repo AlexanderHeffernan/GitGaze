@@ -1,7 +1,7 @@
 #if DEBUG
 import AppKit
 import SwiftUI
-import GitGlazeCore
+import GitGazeCore
 
 extension AppDelegate {
     func review(in directory: String) async {

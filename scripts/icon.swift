@@ -2,7 +2,7 @@ import AppKit
 
 // A record dial, matching the native menu-bar instrument at every icon resolution.
 let output = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
-let iconset = output.appendingPathComponent("GitGlaze.iconset", isDirectory: true)
+let iconset = output.appendingPathComponent("GitGaze.iconset", isDirectory: true)
 try FileManager.default.createDirectory(at: iconset, withIntermediateDirectories: true)
 for size in [16, 32, 128, 256, 512] {
     for scale in [1, 2] {
@@ -39,7 +39,7 @@ for size in [16, 32, 128, 256, 512] {
 }
 let process = Process()
 process.executableURL = URL(fileURLWithPath: "/usr/bin/iconutil")
-process.arguments = ["-c", "icns", iconset.path, "-o", output.appendingPathComponent("GitGlaze.icns").path]
+process.arguments = ["-c", "icns", iconset.path, "-o", output.appendingPathComponent("GitGaze.icns").path]
 try process.run()
 process.waitUntilExit()
 guard process.terminationStatus == 0 else { exit(process.terminationStatus) }

@@ -2,17 +2,25 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <!-- Stable identity preserves preferences across the GitGlaze rename. -->
+    <!-- Stable identity preserves preferences across app renames. -->
     <key>CFBundleIdentifier</key><string>app.gitbar.mac</string>
-    <key>CFBundleName</key><string>GitGlaze</string>
-    <key>CFBundleDisplayName</key><string>GitGlaze</string>
-    <key>CFBundleExecutable</key><string>GitGlaze</string>
-    <key>CFBundleIconFile</key><string>GitGlaze</string>
+    <key>CFBundleName</key><string>GitGaze</string>
+    <key>CFBundleDisplayName</key><string>GitGaze</string>
+    <key>CFBundleExecutable</key><string>GitGaze</string>
+    <key>CFBundleIconFile</key><string>GitGaze</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>1.0.0</string>
     <key>CFBundleVersion</key><string>1</string>
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <key>LSUIElement</key><true/>
     <key>NSHighResolutionCapable</key><true/>
+    <key>SUFeedURL</key><string>https://github.com/AlexanderHeffernan/GitGaze/releases/latest/download/appcast.xml</string>
+    <key>SUPublicEDKey</key><string>F21vDAB46KghInZ5pS5mbFY5xVheYg/T6nL4iGxTy+k=</string>
+    <key>SUVerifyUpdateBeforeExtraction</key><true/>
+    <key>SURequireSignedFeed</key><true/>
+    <key>SUEnableAutomaticChecks</key><true/>
+    <key>SUAutomaticallyUpdate</key><false/>
+    <key>SUSendProfileInfo</key><false/>
+    <key>SUScheduledCheckInterval</key><integer>21600</integer>
 </dict>
 </plist>

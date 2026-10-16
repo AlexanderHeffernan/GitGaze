@@ -1,5 +1,5 @@
 import SwiftUI
-import GitGlazeCore
+import GitGazeCore
 
 struct PeopleCard: View {
     @ObservedObject var store: Store

@@ -2,6 +2,8 @@
 .swiftpm/
 .DS_Store
 *.xcodeproj/xcuserdata/
+__pycache__/
+*.pyc
 
 # Review captures can contain private contribution data.
 /.amp/in/

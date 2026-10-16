@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import GitGlazeCore
+@testable import GitGazeCore
 
 struct ContributionTests {
     func day(_ date: String, _ count: Int) -> ContributionDay { .init(date: date, contributionCount: count) }

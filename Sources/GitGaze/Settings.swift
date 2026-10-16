@@ -77,9 +77,10 @@ struct SettingsView: View {
                 .confirmationDialog("Enable push detection across repositories?", isPresented: $confirmDetection) {
                     Button("Enable Git integration") { store.enablePushDetection(true) }
                 } message: {
-                    Text("Adds Git's trace2.eventTarget setting to your user configuration. Events stay on this Mac, in memory. Turning this off removes only GitGlaze's setting. Clients that bypass Git aren't covered.")
+                    Text("Adds Git's trace2.eventTarget setting to your user configuration. Events stay on this Mac, in memory. Turning this off removes only GitGaze's setting. Clients that bypass Git aren't covered.")
                 }
             }
+            UpdateSettings(updates: store.updates)
             if let person = store.dashboard?.profile.person {
                 HStack(spacing: 10) {
                     AsyncImage(url: URL(string: person.avatarUrl)) { image in image.resizable() } placeholder: { Circle().fill(.quaternary) }

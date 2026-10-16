@@ -1,5 +1,5 @@
 import SwiftUI
-import GitGlazeCore
+import GitGazeCore
 
 struct TodayCard: View {
     let stats: ContributionStats

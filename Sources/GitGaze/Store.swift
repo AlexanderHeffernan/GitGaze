@@ -1,6 +1,6 @@
 import AppKit
 import Combine
-import GitGlazeCore
+import GitGazeCore
 import ServiceManagement
 import UserNotifications
 
@@ -62,6 +62,7 @@ final class Store: ObservableObject {
     @Published var reminderHour: Int { didSet { defaults.set(reminderHour, forKey: "reminderHour") } }
     @Published private(set) var detectPushes: Bool
     @Published private(set) var lastDetectedPush: Date?
+    let updates = AppUpdates()
     private let pushMonitor = PushMonitor()
     private var activityTask: Task<Void, Never>?
     private var celebrationTask: Task<Void, Never>?
@@ -96,7 +97,7 @@ final class Store: ObservableObject {
         if !dashboard.historyComplete { return loadingHistory ? "Past year · loading history" : "Past year only" }
         return "Since \(dashboard.profile.years.min() ?? Calendar.current.component(.year, from: now))"
     }
-    // Keep the pre-rename cache location so existing GitGlaze users retain offline history.
+    // Keep the pre-rename cache location so existing users retain offline history.
     var cacheURL: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("GitBar/dashboard.json")
@@ -122,6 +123,8 @@ final class Store: ObservableObject {
         reminder = defaults.bool(forKey: "streakReminder")
         reminderHour = defaults.object(forKey: "reminderHour") as? Int ?? 18
         detectPushes = defaults.bool(forKey: "detectPushes")
+        // Launch validation must never read credentials/cache or touch the user's Git integration.
+        if CommandLine.arguments.contains("--smoke-test") { return }
         if let data = try? Data(contentsOf: cacheURL) {
             dashboard = try? JSONDecoder().decode(Dashboard.self, from: data)
         }

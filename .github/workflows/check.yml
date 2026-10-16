@@ -1,15 +1,125 @@
-name: Check
-on: [push, pull_request]
+name: Check & Release
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
 permissions:
   contents: read
+concurrency:
+  group: gitgaze-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   macos:
-    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-15-intel]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: swift-actions/setup-swift@v3
+        with:
+          swift-version: "6.2.4"
       - name: Test
         run: swift test
       - name: Test release
         run: swift test -c release
+      - name: Test release contracts
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
       - name: Build app bundle
         run: ./scripts/build.sh
+      - name: Smoke test packaged app
+        run: .build/GitGaze.app/Contents/MacOS/GitGaze --smoke-test
+
+  release:
+    needs: macos
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'AlexanderHeffernan/GitGaze'
+    runs-on: macos-15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: swift-actions/setup-swift@v3
+        with:
+          swift-version: "6.2.4"
+      - name: Determine immutable release version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="$(python3 scripts/release.py version)"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          DRAFT="$(gh release view "v$VERSION" --json isDraft --jq .isDraft 2>/dev/null || true)"
+          if [ "$DRAFT" = false ]; then
+            test "$(git rev-parse "v$VERSION^{commit}")" = "$GITHUB_SHA" || { echo 'Existing release belongs to another commit.' >&2; exit 1; }
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "This commit is already released as v$VERSION."
+          fi
+      - name: Configure Developer ID and notarisation
+        if: steps.version.outputs.published != 'true' && vars.MACOS_SIGNING_ENABLED == 'true'
+        env:
+          CERTIFICATE: ${{ secrets.DEVELOPER_ID_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          umask 077
+          : "${CERTIFICATE:?Missing signing certificate}" "${CERTIFICATE_PASSWORD:?Missing certificate password}"
+          : "${APPLE_ID:?Missing Apple ID}" "${APPLE_APP_PASSWORD:?Missing notarisation password}" "${APPLE_TEAM_ID:?Missing team ID}"
+          PASSWORD="$(openssl rand -hex 32)"
+          echo "::add-mask::$PASSWORD"
+          KEYCHAIN="$RUNNER_TEMP/gitgaze-signing.keychain-db"
+          security create-keychain -p "$PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$PASSWORD" "$KEYCHAIN"
+          printf '%s' "$CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          chmod 600 "$RUNNER_TEMP/certificate.p12"
+          security import "$RUNNER_TEMP/certificate.p12" -k "$KEYCHAIN" -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$PASSWORD" "$KEYCHAIN" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN" "$HOME/Library/Keychains/login.keychain-db"
+          IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN" | awk '/Developer ID Application/ {print $2; exit}')"
+          test -n "$IDENTITY"
+          echo "CODESIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+          xcrun notarytool store-credentials gitgaze-notary --keychain "$KEYCHAIN" --apple-id "$APPLE_ID" --password "$APPLE_APP_PASSWORD" --team-id "$APPLE_TEAM_ID"
+          echo 'NOTARY_PROFILE=gitgaze-notary' >> "$GITHUB_ENV"
+          echo "NOTARY_KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
+      - name: Build universal app and signed update feed
+        if: steps.version.outputs.published != 'true'
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_NOTES_FILE: ${{ runner.temp }}/gitgaze-notes.md
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test -n "$SPARKLE_PRIVATE_KEY" || { echo 'Configure SPARKLE_PRIVATE_KEY before releasing.' >&2; exit 1; }
+          gh api --method POST "repos/$GITHUB_REPOSITORY/releases/generate-notes" \
+            -f tag_name="v$RELEASE_VERSION" -f target_commitish="$GITHUB_SHA" --jq .body > "$RELEASE_NOTES_FILE"
+          ./scripts/package-release.sh "$RELEASE_VERSION"
+          lipo -verify_arch arm64 x86_64 .build/GitGaze.app/Contents/MacOS/GitGaze
+      - name: Publish complete release for the tested commit
+        if: steps.version.outputs.published != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          TAG="v$RELEASE_VERSION"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --draft --target "$GITHUB_SHA" --title "$TAG" --generate-notes
+          fi
+          gh release upload "$TAG" .build/distribution/{GitGaze.zip,appcast.xml,SHA256SUMS} --clobber
+          gh release edit "$TAG" --draft=false --latest
+      - name: Remove temporary Apple signing credentials
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/certificate.p12"
+          if [ -f "$RUNNER_TEMP/gitgaze-signing.keychain-db" ]; then
+            security delete-keychain "$RUNNER_TEMP/gitgaze-signing.keychain-db"
+          fi

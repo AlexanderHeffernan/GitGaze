@@ -17,11 +17,11 @@ public struct GitHubClient: Sendable {
         request.timeoutInterval = 30
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("GitGlaze/1.0", forHTTPHeaderField: "User-Agent")
+        request.setValue("GitGaze/1.0", forHTTPHeaderField: "User-Agent")
         request.httpBody = try JSONSerialization.data(withJSONObject: ["query": query, "variables": variables])
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw GitHubError.message("GitHub did not respond.") }
-        if http.statusCode == 401 { throw GitHubError.message("Your GitHub CLI session expired. Run gh auth login, then relaunch GitGlaze.") }
+        if http.statusCode == 401 { throw GitHubError.message("Your GitHub CLI session expired. Run gh auth login, then relaunch GitGaze.") }
         if http.statusCode == 403 || http.statusCode == 429 {
             throw GitHubError.message("GitHub is limiting requests. Your saved contributions are still here; try again later.")
         }
