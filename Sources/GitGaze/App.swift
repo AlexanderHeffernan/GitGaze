@@ -19,8 +19,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     let store = Store()
     private var statusItem: NSStatusItem!
     private let popover = NSPopover()
-    private var statusView: NSHostingView<StatusLabel>?
     private var cancellable: AnyCancellable?
+    private var appearanceObservation: NSKeyValueObservation?
+    private var statusUpdateScheduled = false
+    private var renderedStatus: StatusRender?
+    private var flashing = false
     private(set) var celebrationPanel: NSPanel?
     private var displayedCelebration: UUID?
 
@@ -34,9 +37,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         popover.animates = true
         popover.delegate = self
         popover.contentSize = NSSize(width: Theme.width, height: Theme.height)
-        popover.contentViewController = NSHostingController(rootView: DashboardView(store: store))
-        store.changed = { [weak self] in self?.updateStatus() }
-        cancellable = store.objectWillChange.sink { [weak self] in Task { @MainActor in self?.updateStatus() } }
+        // The dashboard is built when the popover opens and released when it closes, so a closed
+        // popover never re-renders in the background on every store change.
+        button.imagePosition = .imageOnly
+        button.imageScaling = .scaleNone
+        let cursor = StatusCursorView(frame: button.bounds)
+        cursor.autoresizingMask = [.width, .height]
+        button.addSubview(cursor)
+        store.changed = { [weak self] in self?.scheduleStatusUpdate() }
+        cancellable = store.objectWillChange.sink { [weak self] in self?.scheduleStatusUpdate() }
+        appearanceObservation = button.observe(\.effectiveAppearance) { [weak self] _, _ in
+            Task { @MainActor in self?.scheduleStatusUpdate() }
+        }
+        NotificationCenter.default.addObserver(self, selector: #selector(screensChanged), name: NSApplication.didChangeScreenParametersNotification, object: nil)
         updateStatus()
         if CommandLine.arguments.contains("--smoke-test") {
             print("GitGaze launch smoke test passed")
@@ -59,6 +72,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     @objc private func wake() { store.refresh() }
+    @objc private func screensChanged() { scheduleStatusUpdate() }
+    func popoverDidClose(_ notification: Notification) { popover.contentViewController = nil }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { showPopover(); return true }
     @objc private func togglePopover() {
         if NSApp.currentEvent?.type == .rightMouseUp {
@@ -90,30 +105,56 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         popover.contentViewController?.view.window?.makeKey()
     }
 
+    /// Store changes arrive in bursts (objectWillChange fires before each property changes);
+    /// collapse each burst into one status update after the values have settled.
+    func scheduleStatusUpdate() {
+        guard !statusUpdateScheduled else { return }
+        statusUpdateScheduled = true
+        Task { @MainActor [weak self] in self?.updateStatus() }
+    }
+
     func updateStatus() {
+        statusUpdateScheduled = false
         guard let button = statusItem?.button else { return }
-        let root = StatusLabel(stats: store.stats, connected: store.dashboard != nil,
+        let label = StatusLabel(stats: store.stats, connected: store.dashboard != nil,
             stale: store.error != nil, showStreak: UserDefaults.standard.bool(forKey: "menuStreak"),
-            celebrating: store.celebration != nil, style: store.menuStyle)
-        let view: NSHostingView<StatusLabel>
-        if let existing = statusView { existing.rootView = root; view = existing }
-        else {
-            view = StatusHostingView(rootView: root)
-            view.setAccessibilityElement(false)
-            statusView = view
-            button.addSubview(view)
+            celebrating: flashing, style: store.menuStyle)
+        let appearance = button.effectiveAppearance
+        let scale = max(button.window?.backingScaleFactor ?? 1, NSScreen.screens.map(\.backingScaleFactor).max() ?? 2)
+        let render = StatusRender(label: label, dark: appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua,
+            scale: scale, customLight: store.customLight, customDark: store.customDark)
+        // The status item shows a pre-rendered image rather than a live NSHostingView. A live SwiftUI
+        // view re-rendered whenever AppKit snapshotted it for another display's menu bar, and that
+        // render dirtied the item again, so with multiple displays it redrew continuously.
+        if render != renderedStatus, let image = render.image(appearance: appearance) {
+            renderedStatus = render
+            button.image = image
+            statusItem.length = image.size.width + 12
         }
-        let width = view.fittingSize.width + 12
-        statusItem.length = width
-        view.frame = NSRect(x: 6, y: 0, width: width - 12, height: button.bounds.height)
-        button.toolTip = store.dashboard == nil ? "GitGaze · Connect GitHub CLI" : "GitGaze · \(store.stats?.todayCount ?? 0) contributions today · \(store.stats?.currentStreak ?? 0)-day streak · \((MenuStyle(rawValue: store.menuStyle) ?? .charge).detail)"
-        button.setAccessibilityLabel(button.toolTip)
+        let tooltip = store.dashboard == nil ? "GitGaze · Connect GitHub CLI" : "GitGaze · \(store.stats?.todayCount ?? 0) contributions today · \(store.stats?.currentStreak ?? 0)-day streak · \((MenuStyle(rawValue: store.menuStyle) ?? .charge).detail)"
+        if button.toolTip != tooltip {
+            button.toolTip = tooltip
+            button.setAccessibilityLabel(tooltip)
+        }
         if let celebration = store.celebration, displayedCelebration != celebration.id {
             displayedCelebration = celebration.id
+            flashStatus()
             presentCelebration(count: celebration.count, record: celebration.record, sample: celebration.sample)
         } else if store.celebration == nil {
             celebrationPanel?.orderOut(nil)
             celebrationPanel = nil
+        }
+    }
+
+    /// A brief brighten of the menu-bar label when new work lands.
+    private func flashStatus() {
+        guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
+        flashing = true
+        scheduleStatusUpdate()
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(450))
+            self?.flashing = false
+            self?.scheduleStatusUpdate()
         }
     }
 
@@ -142,9 +183,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 }
 
-final class StatusHostingView: NSHostingView<StatusLabel> {
+/// Keeps the pointing-hand cursor over the status item without intercepting clicks.
+final class StatusCursorView: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
     override func resetCursorRects() { addCursorRect(bounds, cursor: .pointingHand) }
+    override func isAccessibilityElement() -> Bool { false }
+}
+
+/// Everything that affects the menu-bar pixels. Rendering is skipped when none of it changed.
+struct StatusRender: Equatable {
+    let label: StatusLabel
+    let dark: Bool
+    let scale: CGFloat
+    let customLight: String
+    let customDark: String
+
+    @MainActor func image(appearance: NSAppearance) -> NSImage? {
+        let renderer = ImageRenderer(content: label.environment(\.colorScheme, dark ? .dark : .light))
+        renderer.scale = scale
+        var image: NSImage?
+        // Resolve the palette's dynamic NSColors against the menu bar, not the app's appearance.
+        appearance.performAsCurrentDrawingAppearance { image = renderer.nsImage }
+        return image
+    }
 }
 
 enum MenuStyle: String, CaseIterable, Identifiable {
@@ -161,15 +222,42 @@ enum MenuStyle: String, CaseIterable, Identifiable {
     }
 }
 
-struct StatusLabel: View {
-    let stats: ContributionStats?
+/// Just the figures the menu-bar label draws, so two labels can be compared cheaply.
+struct StatusFigures: Equatable {
+    let todayCount: Int
+    let currentStreak: Int
+    let progress: Double
+    let isNewRecord: Bool
+    /// The last 28 days, oldest first.
+    let recent: [Int]
+
+    init(_ stats: ContributionStats) {
+        todayCount = stats.todayCount
+        currentStreak = stats.currentStreak
+        progress = stats.progress
+        isNewRecord = stats.isNewRecord
+        recent = (0..<28).map { stats.count(on: ContributionStats.offset(stats.today, by: $0 - 27)) }
+    }
+}
+
+struct StatusLabel: View, Equatable {
+    let stats: StatusFigures?
     let connected: Bool
     let stale: Bool
     let showStreak: Bool
     var celebrating = false
     var style = "charge"
     var palette = Theme.palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    init(stats: ContributionStats?, connected: Bool, stale: Bool, showStreak: Bool, celebrating: Bool = false, style: String = "charge") {
+        self.stats = stats.map(StatusFigures.init)
+        self.connected = connected
+        self.stale = stale
+        self.showStreak = showStreak
+        self.celebrating = celebrating
+        self.style = style
+    }
+
     private var count: String { connected ? String(stats?.todayCount ?? 0) : "–" }
     var body: some View {
         HStack(spacing: 5) {
@@ -211,23 +299,17 @@ struct StatusLabel: View {
             }
             if stale { Circle().fill(Theme.gold).frame(width: 3, height: 3) }
         }.frame(height: 22).fixedSize().allowsHitTesting(false).accessibilityHidden(true)
-            .phaseAnimator([false, true, false], trigger: celebrating) { view, phase in
-                view.brightness(phase && celebrating && !reduceMotion ? 0.25 : 0)
-            }
+            .brightness(celebrating ? 0.25 : 0)
     }
 }
 
 private struct MiniActivity: View {
-    let stats: ContributionStats?
+    let stats: StatusFigures?
     let style: String
     let color: Color
     var body: some View {
         let days = style == "mosaic" ? 28 : 7
-        let values = (0..<days).map { index in
-            guard let stats else { return 0 }
-            let date = ContributionStats.offset(stats.today, by: index - days + 1)
-            return stats.days.first { $0.date == date }?.contributionCount ?? 0
-        }
+        let values = Array((stats?.recent ?? Array(repeating: 0, count: 28)).suffix(days))
         Canvas { context, size in
             let accent = stats?.isNewRecord == true ? Theme.gold : color
             if style == "prism" {

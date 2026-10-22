@@ -4,15 +4,16 @@ import GitGazeCore
 struct PeopleCard: View {
     @ObservedObject var store: Store
     let favouritesOnly: Bool
-    private var people: [Person] { store.orderedPeople.filter { !favouritesOnly || store.favourites.contains($0.login) } }
     var body: some View {
+        let people = favouritesOnly ? store.favouritePeople : store.orderedPeople
+        let shown = Array(people.prefix(store.peopleLimit))
         Card {
             sectionHeading(favouritesOnly ? "FAVOURITES" : "FOLLOWING")
             if let error = store.peopleError { Text(error).font(.system(size: 10)).foregroundStyle(Theme.gold) }
             if people.isEmpty { Text("Choose people in this widget’s settings.").font(.system(size: 11)).foregroundStyle(.secondary).padding(.vertical, 12) }
-            ForEach(Array(people.prefix(store.peopleLimit))) { person in
-                PersonRow(person: person, profile: store.dashboard?.people[person.login], today: store.today)
-                if person.login != people.prefix(store.peopleLimit).last?.login { Divider().opacity(0.35).padding(.vertical, 7) }
+            ForEach(shown) { person in
+                PersonRow(person: person, profile: store.dashboard?.people[person.login], today: store.today, stats: store.stats(for: person.login))
+                if person.login != shown.last?.login { Divider().opacity(0.35).padding(.vertical, 7) }
             }
             if people.count > store.peopleLimit {
                 Button("Show more") { store.peopleLimit += 12; Task { await store.loadPeople() } }.buttonStyle(QuietButtonStyle()).font(.system(size: 11))
@@ -32,6 +33,8 @@ struct PeopleSettings: View {
         store.orderedPeople.filter { search.isEmpty || $0.login.localizedCaseInsensitiveContains(search) || $0.displayName.localizedCaseInsensitiveContains(search) }
     }
     var body: some View {
+        let matches = matches
+        let favourites = store.favouritePeople
         VStack(spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(searching ? Theme.accent : Color.secondary)
@@ -48,7 +51,6 @@ struct PeopleSettings: View {
                     Text(person.displayName).font(.system(size: 11, weight: .medium)).lineLimit(1).help("@\(person.login)")
                     Spacer(minLength: 0)
                     if selected {
-                        let favourites = store.orderedPeople.filter { store.favourites.contains($0.login) }
                         IconButton(symbol: "arrow.up", label: "Move \(person.login) up") { store.moveFavourite(person.login, by: -1) }
                             .disabled(favourites.first?.login == person.login)
                         IconButton(symbol: "arrow.down", label: "Move \(person.login) down") { store.moveFavourite(person.login, by: 1) }
@@ -78,6 +80,8 @@ struct PersonRow: View {
     let person: Person
     let profile: Profile?
     let today: String
+    /// Supplied by the store's per-profile cache; computed here only for previews and review captures.
+    var stats: ContributionStats? = nil
     @State var expanded = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var body: some View {
@@ -92,7 +96,7 @@ struct PersonRow: View {
                         }.buttonStyle(QuietButtonStyle())
                     }
                     if let profile {
-                        let stats = ContributionStats(days: profile.days, today: today)
+                        let stats = stats ?? ContributionStats(days: profile.days, today: today)
                         HStack(spacing: 5) {
                             metric("Today", stats.todayCount)
                             metric("Week", stats.weekTotal)

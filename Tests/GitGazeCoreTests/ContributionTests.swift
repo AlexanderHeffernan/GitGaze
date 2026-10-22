@@ -75,6 +75,39 @@ struct ContributionTests {
         #expect(!stats.isNewRecord)
     }
 
+    @Test func dayArithmeticMatchesTheGregorianCalendarAcrossCenturies() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        var date = calendar.date(from: DateComponents(year: 1899, month: 12, day: 25))!
+        let end = calendar.date(from: DateComponents(year: 2101, month: 1, day: 8))!
+        while date < end {
+            let parts = calendar.dateComponents([.year, .month, .day, .weekday], from: date)
+            let key = String(format: "%04d-%02d-%02d", parts.year!, parts.month!, parts.day!)
+            let next = calendar.date(byAdding: .day, value: 1, to: date)!
+            let nextParts = calendar.dateComponents([.year, .month, .day], from: next)
+            #expect(ContributionStats.offset(key, by: 1) == String(format: "%04d-%02d-%02d", nextParts.year!, nextParts.month!, nextParts.day!))
+            let monday = calendar.date(byAdding: .day, value: -((parts.weekday! + 5) % 7), to: date)!
+            let mondayParts = calendar.dateComponents([.year, .month, .day], from: monday)
+            #expect(ContributionStats.weekStart(key) == String(format: "%04d-%02d-%02d", mondayParts.year!, mondayParts.month!, mondayParts.day!))
+            date = calendar.date(byAdding: .day, value: 13, to: date)!
+        }
+        #expect(ContributionStats.offset("2026-10-16", by: -3650) == "2016-10-18")
+        #expect(ContributionStats.offset("not-a-date", by: 1) == "1970-01-02")
+    }
+
+    @Test func lookupsAndRangesMatchFullScans() {
+        let days = (0..<900).map { day(ContributionStats.offset("2024-01-01", by: $0), ($0 * 7) % 13) }
+        let stats = ContributionStats(days: days.shuffled(), today: "2026-03-15")
+        #expect(stats.count(on: "2025-06-01") == days.first { $0.date == "2025-06-01" }!.contributionCount)
+        #expect(stats.count(on: "2030-01-01") == 0)
+        let slice = stats.days(from: "2025-02-27", through: "2025-03-02")
+        #expect(slice.map(\.date) == ["2025-02-27", "2025-02-28", "2025-03-01", "2025-03-02"])
+        #expect(stats.days(from: "2026-12-01", through: "2026-12-31").isEmpty)
+        let scanned = days.filter { $0.date >= "2025-01-01" && $0.date <= "2025-07-04" }.reduce(0) { $0 + $1.contributionCount }
+        #expect(stats.total(inYear: 2025, throughMonthDay: "07-04") == scanned)
+        #expect(stats.activeDays == days.filter { $0.date <= "2026-03-15" && $0.contributionCount > 0 }.count)
+    }
+
     @Test func contributionCelebrationsIgnoreBaselinesRetriesAndCorrectionsButResetAtMidnight() {
         var tracker = ContributionIncreaseTracker()
         #expect(tracker.observe(day: "2026-10-16", count: 12) == 0)

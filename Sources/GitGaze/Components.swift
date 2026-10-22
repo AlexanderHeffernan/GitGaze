@@ -1,15 +1,34 @@
 import SwiftUI
+import os
 
 enum Palette: String, CaseIterable, Identifiable {
     case violet, coral, ice, graphite, mint, rose, amber, cobalt, orchid, lagoon, custom
     var id: String { rawValue }
     var title: String { rawValue.capitalized }
-    var color: Color { Color(nsColor: nsColor) }
-    var nsColor: NSColor {
+    var color: Color { colors.color }
+    var nsColor: NSColor { colors.nsColor }
+
+    /// One shared dynamic colour per palette (and custom pair). Fresh instances on every read made
+    /// SwiftUI treat each render's colours as changed, and allocated on every view body.
+    private var colors: (nsColor: NSColor, color: Color) {
+        let light = self == .custom ? UserDefaults.standard.string(forKey: "customLight") ?? "6E4AC9" : ""
+        let dark = self == .custom ? UserDefaults.standard.string(forKey: "customDark") ?? "B09CFF" : ""
+        let key = rawValue + light + dark
+        return Self.cache.withLock { cache in
+            if let cached = cache[key] { return (cached.0.value, cached.1) }
+            let nsColor = makeColor(customLight: light, customDark: dark)
+            let entry = (UncheckedColor(value: nsColor), Color(nsColor: nsColor))
+            cache[key] = entry
+            return (nsColor, entry.1)
+        }
+    }
+    private static let cache = OSAllocatedUnfairLock<[String: (UncheckedColor, Color)]>(initialState: [:])
+
+    private func makeColor(customLight: String, customDark: String) -> NSColor {
         NSColor(name: nil) { appearance in
             let dark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
             if self == .custom {
-                return Theme.color(hex: UserDefaults.standard.string(forKey: dark ? "customDark" : "customLight") ?? (dark ? "B09CFF" : "6E4AC9")) ?? .systemPurple
+                return Theme.color(hex: dark ? customDark : customLight) ?? .systemPurple
             }
             let rgb: (CGFloat, CGFloat, CGFloat) = switch self {
             case .violet: dark ? (0.69, 0.61, 1) : (0.43, 0.29, 0.79)
@@ -28,6 +47,9 @@ enum Palette: String, CaseIterable, Identifiable {
         }
     }
 }
+
+/// NSColor is immutable once created; this lets the shared palette cache cross isolation domains.
+private struct UncheckedColor: @unchecked Sendable { let value: NSColor }
 
 enum Theme {
     static func color(hex: String) -> NSColor? {
@@ -205,12 +227,10 @@ extension View {
 private struct HandCursor: NSViewRepresentable {
     let enabled: Bool
     func makeNSView(context: Context) -> CursorRegion { CursorRegion() }
-    func updateNSView(_ view: CursorRegion, context: Context) {
-        view.enabled = enabled
-        view.window?.invalidateCursorRects(for: view)
-    }
+    func updateNSView(_ view: CursorRegion, context: Context) { view.enabled = enabled }
     final class CursorRegion: NSView {
-        var enabled = true
+        // Invalidating on every SwiftUI update churned the window's cursor rects for every button.
+        var enabled = true { didSet { if enabled != oldValue { window?.invalidateCursorRects(for: self) } } }
         override func resetCursorRects() { if enabled { addCursorRect(bounds, cursor: .pointingHand) } }
         override func hitTest(_ point: NSPoint) -> NSView? { nil }
     }
@@ -234,7 +254,11 @@ struct FlippingWidget<Front: View, Back: View>: View {
                     face(back, index: 1).modifier(FlipFace(angle: flipped ? 0 : -180))
                         .allowsHitTesting(flipped).accessibilityHidden(!flipped)
                 }.frame(height: heights[flipped ? 1 : 0], alignment: .top)
-                    .onPreferenceChange(FaceHeights.self) { heights = $0 }
+                    .onPreferenceChange(FaceHeights.self) { measured in
+                        // Whole points and an equality guard stop sub-point measurement jitter from re-laying out forever.
+                        let rounded = measured.mapValues { $0.rounded(.up) }
+                        if rounded != heights { heights = rounded }
+                    }
             }
         }.animation(reduceMotion ? .easeOut(duration: 0.15) : .spring(duration: 0.55, bounce: 0.08), value: flipped)
     }
@@ -268,19 +292,22 @@ struct DashboardScroll<Content: View>: View {
     }
 }
 
+/// Styles the enclosing scroll view once it exists. Restyling from `updateNSView` re-tiled the scroll
+/// view on every SwiftUI update, which invalidated layout and scheduled another update: a render loop.
 private struct ScrollChrome: NSViewRepresentable {
     func makeNSView(context: Context) -> ScrollAnchor { ScrollAnchor() }
-    func updateNSView(_ view: ScrollAnchor, context: Context) { view.styleScrollView() }
+    func updateNSView(_ view: ScrollAnchor, context: Context) {}
 }
 
 private final class ScrollAnchor: NSView {
-    override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); styleScrollView() }
-    func styleScrollView() {
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard window != nil else { return }
         DispatchQueue.main.async { [weak self] in
             guard let scroll = self?.enclosingScrollView else { return }
             if !(scroll.verticalScroller is AccentScroller) { scroll.verticalScroller = AccentScroller() }
-            scroll.scrollerStyle = .overlay
-            scroll.autohidesScrollers = true
+            if scroll.scrollerStyle != .overlay { scroll.scrollerStyle = .overlay }
+            if !scroll.autohidesScrollers { scroll.autohidesScrollers = true }
             scroll.verticalScroller?.needsDisplay = true
         }
     }

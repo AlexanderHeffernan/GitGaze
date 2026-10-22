@@ -35,7 +35,7 @@ enum Module: String, Codable, CaseIterable, Identifiable {
 
 @MainActor
 final class Store: ObservableObject {
-    @Published var dashboard: Dashboard?
+    @Published var dashboard: Dashboard? { didSet { dashboardChanged(from: oldValue) } }
     @Published var loading = false
     @Published var loadingHistory = false
     @Published var loadingPeople = false
@@ -44,8 +44,8 @@ final class Store: ObservableObject {
     @Published var settings = false
     @Published var modules: [Module] { didSet { persistPreferences() } }
     @Published var hidden: Set<String> { didSet { persistPreferences() } }
-    @Published var favourites: Set<String> { didSet { persistPreferences() } }
-    @Published var favouriteOrder: [String] { didSet { defaults.set(favouriteOrder, forKey: "favouriteOrder") } }
+    @Published var favourites: Set<String> { didSet { persistPreferences(); orderPeople() } }
+    @Published var favouriteOrder: [String] { didSet { defaults.set(favouriteOrder, forKey: "favouriteOrder"); orderPeople() } }
     @Published var palette: String { didSet { defaults.set(palette, forKey: "palette"); changed?() } }
     @Published var customLight: String { didSet { defaults.set(customLight, forKey: "customLight"); changed?() } }
     @Published var customDark: String { didSet { defaults.set(customDark, forKey: "customDark"); changed?() } }
@@ -54,7 +54,8 @@ final class Store: ObservableObject {
     @Published var notifications: Bool { didSet { defaults.set(notifications, forKey: "notifications") } }
     @Published var launchAtLogin = SMAppService.mainApp.status == .enabled
     @Published var peopleLimit = 12
-    @Published var now = Date()
+    /// Only republished when the calendar day changes; minute-level ticks would redraw every view.
+    @Published private(set) var now = Date() { didSet { dayChanged() } }
     @Published var celebration: (id: UUID, count: Int, record: Bool, sample: Bool)?
     @Published var visualCelebrations: Bool { didSet { defaults.set(visualCelebrations, forKey: "visualCelebrations") } }
     @Published var celebrationStyle: String { didSet { defaults.set(celebrationStyle, forKey: "celebrationStyle") } }
@@ -75,18 +76,60 @@ final class Store: ObservableObject {
     private var session = UUID()
     private var lastHistoryRefresh: Date?
     private var lastPeopleRefresh: Date?
+    private let cacheWriter = CacheWriter()
+    private var lastAutomaticRefresh: Date?
+    private var cacheVersion = 0
 
-    var today: String { ContributionStats.dayKey(now) }
-    var stats: ContributionStats? {
-        dashboard.map { ContributionStats(days: $0.history + $0.profile.days, today: today) }
-    }
+    // Derived values are cached and rebuilt only when their inputs change. Views read them many
+    // times per render, and recomputing them per read was the dominant cost of every redraw.
+    private(set) var today = ContributionStats.dayKey()
+    private(set) var stats: ContributionStats?
+    private(set) var orderedPeople: [Person] = []
+    private var personStats: [String: (days: [ContributionDay], stats: ContributionStats)] = [:]
+
     var visibleModules: [Module] { modules.filter { !hidden.contains($0.rawValue) } }
-    var orderedPeople: [Person] {
-        (dashboard?.following ?? []).sorted {
-            if favourites.contains($0.login) != favourites.contains($1.login) { return favourites.contains($0.login) }
-            if favourites.contains($0.login) {
-                let a = favouriteOrder.firstIndex(of: $0.login) ?? Int.max
-                let b = favouriteOrder.firstIndex(of: $1.login) ?? Int.max
+    var favouritePeople: [Person] { orderedPeople.filter { favourites.contains($0.login) } }
+
+    /// Per-person figures for the people widgets, built at most once per profile and day.
+    func stats(for login: String) -> ContributionStats? {
+        guard let profile = dashboard?.people[login] else { return nil }
+        // Array equality short-circuits on shared storage, so an unchanged profile is an O(1) hit.
+        if let cached = personStats[login], cached.days == profile.days { return cached.stats }
+        let stats = ContributionStats(days: profile.days, today: today)
+        personStats[login] = (profile.days, stats)
+        return stats
+    }
+
+    /// Advances `now` only across a day boundary, so the half-minute timer stays silent otherwise.
+    private func tick() {
+        let date = Date()
+        if ContributionStats.dayKey(date) != today { now = date }
+    }
+
+    private func dayChanged() {
+        let day = ContributionStats.dayKey(now)
+        guard day != today else { return }
+        today = day
+        personStats = [:]
+        rebuildStats()
+    }
+
+    private func dashboardChanged(from old: Dashboard?) {
+        if old?.history != dashboard?.history || old?.profile.days != dashboard?.profile.days { rebuildStats() }
+        if old?.following.map(\.login) != dashboard?.following.map(\.login) { orderPeople() }
+    }
+
+    private func rebuildStats() {
+        stats = dashboard.map { ContributionStats(days: $0.history + $0.profile.days, today: today) }
+    }
+
+    private func orderPeople() {
+        let rank = Dictionary(favouriteOrder.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
+        orderedPeople = (dashboard?.following ?? []).sorted {
+            let first = favourites.contains($0.login), second = favourites.contains($1.login)
+            if first != second { return first }
+            if first {
+                let a = rank[$0.login] ?? Int.max, b = rank[$1.login] ?? Int.max
                 if a != b { return a < b }
             }
             return $0.login.localizedCaseInsensitiveCompare($1.login) == .orderedAscending
@@ -128,6 +171,8 @@ final class Store: ObservableObject {
         if let data = try? Data(contentsOf: cacheURL) {
             dashboard = try? JSONDecoder().decode(Dashboard.self, from: data)
         }
+        rebuildStats()
+        orderPeople()
         if let dashboard {
             let stats = ContributionStats(days: dashboard.profile.days, today: today)
             _ = increases.observe(day: today, count: stats.todayCount)
@@ -144,14 +189,18 @@ final class Store: ObservableObject {
             Task { @MainActor in
                 guard let self else { return }
                 let oldDay = self.today
-                self.now = Date()
-                self.changed?()
+                self.tick()
                 self.checkReminder()
-                if oldDay != self.today || (self.dashboard?.updatedAt.timeIntervalSinceNow ?? -.infinity) < -300 {
+                // Stale data retries at most every five minutes, so being offline doesn't poll GitHub twice a minute.
+                let stale = (self.dashboard?.updatedAt.timeIntervalSinceNow ?? -.infinity) < -300
+                let retryDue = (self.lastAutomaticRefresh?.timeIntervalSinceNow ?? -.infinity) < -300
+                if oldDay != self.today || (stale && retryDue) {
+                    self.lastAutomaticRefresh = Date()
                     self.refresh()
                 }
             }
         }
+        timer?.tolerance = 5
     }
 
     func start() async {
@@ -160,8 +209,7 @@ final class Store: ObservableObject {
     }
 
     func refresh(force: Bool = false) {
-        now = Date()
-        changed?()
+        tick()
         guard !loading else { return }
         if token == nil { refreshTask = Task { await useCLI() }; return }
         if !force, let date = dashboard?.updatedAt, Date().timeIntervalSince(date) < 30 { return }
@@ -178,7 +226,7 @@ final class Store: ObservableObject {
         do {
             let profile = try await client.viewer()
             guard session == generation, !Task.isCancelled else { return }
-            now = Date()
+            tick()
             let previous = dashboard?.profile.person.login == profile.person.login ? dashboard : nil
             let oldCount = previous.map { ContributionStats(days: $0.profile.days, today: today).todayCount }
             dashboard = Dashboard(profile: profile, history: previous?.history ?? [],
@@ -236,14 +284,22 @@ final class Store: ObservableObject {
         // Only load the visible page and favourites, not every followed account.
         let visible = orderedPeople.prefix(peopleLimit)
         let wanted = Array(Set(logins ?? Array(visible.map(\.login))).union(favourites.intersection(Set(orderedPeople.map(\.login)))))
-        for login in wanted {
-            do {
-                let profile = try await client.profile(login: login)
+        // Four requests in flight at a time: much faster than one by one, well within GitHub's limits.
+        // (Plain tasks rather than a task group: the group form crashes release builds on current toolchains.)
+        var remaining = wanted[...]
+        while !remaining.isEmpty {
+            let batch = remaining.prefix(4).map { login in (login, Task { try await client.profile(login: login) }) }
+            remaining = remaining.dropFirst(4)
+            for (login, request) in batch {
+                do {
+                    let profile = try await request.value
+                    guard session == generation, !Task.isCancelled else { return }
+                    dashboard?.people[login] = profile
+                } catch { if session == generation { peopleError = error.localizedDescription } }
                 guard session == generation, !Task.isCancelled else { return }
-                dashboard?.people[login] = profile
-            } catch { if session == generation { peopleError = error.localizedDescription } }
-            guard session == generation, !Task.isCancelled else { return }
+            }
         }
+        guard session == generation else { return }
         saveCache()
     }
 
@@ -380,7 +436,7 @@ final class Store: ObservableObject {
             ContributionStats.dayKey(dashboard.updatedAt) == today,
             Date().timeIntervalSince(dashboard.updatedAt) < 600,
             stats.todayCount == 0, stats.currentStreak > 0,
-            Calendar.current.component(.hour, from: now) >= reminderHour,
+            Calendar.current.component(.hour, from: Date()) >= reminderHour,
             defaults.string(forKey: "lastReminderDay") != today else { return }
         let content = UNMutableNotificationContent()
         content.title = "Keep your \(stats.currentStreak)-day streak going."
@@ -410,13 +466,34 @@ final class Store: ObservableObject {
         defaults.set(Array(favourites), forKey: "favourites")
     }
 
+    /// Encoding and writing the (often half-megabyte) cache happens off the main thread.
     private func saveCache() {
         guard let dashboard else { return }
+        let url = cacheURL
+        cacheVersion += 1
+        let version = cacheVersion
+        Task {
+            if let message = await cacheWriter.save(dashboard, version: version, to: url) {
+                error = "Couldn't save your offline cache. \(message)"
+            }
+        }
+    }
+}
+
+/// Serialises cache writes off the main actor; a stale snapshot can never overwrite a newer one.
+private actor CacheWriter {
+    private var written = 0
+
+    /// Versions are assigned on the main actor in mutation order; tasks may arrive here out of order.
+    func save(_ dashboard: Dashboard, version: Int, to url: URL) -> String? {
+        guard version > written else { return nil }
         do {
-            try FileManager.default.createDirectory(at: cacheURL.deletingLastPathComponent(), withIntermediateDirectories: true,
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true,
                 attributes: [.posixPermissions: 0o700])
-            try JSONEncoder().encode(dashboard).write(to: cacheURL, options: .atomic)
-            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: cacheURL.path)
-        } catch { self.error = "Couldn't save your offline cache. \(error.localizedDescription)" }
+            try JSONEncoder().encode(dashboard).write(to: url, options: .atomic)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+            written = version
+            return nil
+        } catch { return error.localizedDescription }
     }
 }
