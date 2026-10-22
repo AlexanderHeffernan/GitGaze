@@ -86,7 +86,7 @@ struct ModuleContent: View {
             case .heatmap: HistoryCard(profile: dashboard.profile, today: store.today)
             case .favourites: PeopleCard(store: store, favouritesOnly: true)
             case .people: PeopleCard(store: store, favouritesOnly: false)
-            case .momentum: MomentumCard(stats: stats, days: dashboard.profile.days, today: store.today)
+            case .momentum: MomentumCard(stats: stats, today: store.today)
             case .records: RecordsCard(stats: stats)
             case .years: YearComparisonCard(store: store)
             }

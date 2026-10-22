@@ -51,7 +51,7 @@ extension AppDelegate {
         }.padding(.horizontal, 22).frame(width: Theme.width).background(Theme.background), to: path("milestones"))
         if let stats = store.stats, let dashboard = store.dashboard {
             await captureReview(VStack(spacing: 0) {
-                MomentumCard(stats: stats, days: dashboard.profile.days, today: today)
+                MomentumCard(stats: stats, today: today)
                 RecordsCard(stats: stats)
                 HistoryOptions()
             }.padding(22).frame(width: Theme.width).background(Theme.background), to: path("weekly-records"))

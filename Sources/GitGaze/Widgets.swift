@@ -60,7 +60,7 @@ struct StreakCard: View {
                 HStack(spacing: 4) {
                     ForEach(0..<7) { index in
                         let key = ContributionStats.offset(stats.today, by: index - 6)
-                        let active = (stats.days.first { $0.date == key }?.contributionCount ?? 0) > 0
+                        let active = stats.count(on: key) > 0
                         Capsule().fill(active ? Theme.accent : Color.primary.opacity(0.07))
                             .overlay(Capsule().strokeBorder(index == 6 ? Theme.accent.opacity(0.7) : .clear, lineWidth: 1))
                             .frame(width: 6, height: index == 6 ? 22 : 16)
@@ -109,36 +109,37 @@ struct Heatmap: View {
     let weeks: Int
     var showDates = true
     @State private var hovered: ContributionDay?
+    /// Columns run Sunday to Saturday, ending with the week that contains today.
     private var cells: [ContributionDay?] {
-        let endDate = ISO8601DateFormatter().date(from: today + "T12:00:00Z") ?? Date()
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
-        let weekday = calendar.component(.weekday, from: endDate) - 1
-        let start = ContributionStats.offset(today, by: -(weeks - 1) * 7 - weekday)
+        let sunday = ContributionStats.offset(ContributionStats.weekStart(ContributionStats.offset(today, by: 1)), by: -1)
+        let start = ContributionStats.offset(sunday, by: -(weeks - 1) * 7)
         let indexed = Dictionary(days.map { ($0.date, $0) }, uniquingKeysWith: { _, last in last })
         return (0..<(weeks * 7)).map { index in
             let key = ContributionStats.offset(start, by: index)
             return key <= today ? indexed[key] ?? ContributionDay(date: key, contributionCount: 0) : nil
         }
     }
+    private static func level(_ day: ContributionDay) -> Int {
+        switch day.color.lowercased() {
+        case "#9be9a8", "#0e4429": 1
+        case "#40c463", "#006d32": 2
+        case "#30a14e", "#26a641": 3
+        case "#216e39", "#39d353": 4
+        default: day.contributionCount > 0 ? min(4, max(1, day.contributionCount / 5 + 1)) : 0
+        }
+    }
     var body: some View {
         let cells = cells
+        let colors = cells.map { $0.map { heatColor(Self.level($0)) } }
         GeometryReader { geometry in
             let pitch = geometry.size.width / CGFloat(weeks)
             let size = max(1, min(pitch - 1.7, (geometry.size.height - (showDates ? 16 : 0)) / 7 - 1.7))
             VStack(alignment: .leading, spacing: 5) {
                 Canvas { context, _ in
                     for (index, day) in cells.enumerated() {
-                        guard let day else { continue }
+                        guard let day, let color = colors[index] else { continue }
                         let rect = CGRect(x: CGFloat(index / 7) * pitch, y: CGFloat(index % 7) * (size + 1.7), width: size, height: size)
-                        let level: Int = switch day.color.lowercased() {
-                        case "#9be9a8", "#0e4429": 1
-                        case "#40c463", "#006d32": 2
-                        case "#30a14e", "#26a641": 3
-                        case "#216e39", "#39d353": 4
-                        default: day.contributionCount > 0 ? min(4, max(1, day.contributionCount / 5 + 1)) : 0
-                        }
-                        context.fill(Path(roundedRect: rect, cornerRadius: 1.2), with: .color(heatColor(level)))
+                        context.fill(Path(roundedRect: rect, cornerRadius: 1.2), with: .color(color))
                         if hovered?.date == day.date { context.stroke(Path(roundedRect: rect.insetBy(dx: -0.4, dy: -0.4), cornerRadius: 1.5), with: .color(.primary.opacity(0.65)), lineWidth: 0.7) }
                     }
                 }
@@ -166,7 +167,6 @@ struct Heatmap: View {
 
 struct MomentumCard: View {
     let stats: ContributionStats
-    let days: [ContributionDay]
     let today: String
     var body: some View {
         Card {
@@ -178,8 +178,7 @@ struct MomentumCard: View {
                 Text("\(stats.lastWeekTotal) last week").font(.system(size: 10)).foregroundStyle(.secondary)
             }
             let start = ContributionStats.weekStart(today)
-            let indexed = Dictionary(days.map { ($0.date, $0.contributionCount) }, uniquingKeysWith: { _, last in last })
-            let values = (0..<7).map { indexed[ContributionStats.offset(start, by: $0)] ?? 0 }
+            let values = (0..<7).map { stats.count(on: ContributionStats.offset(start, by: $0)) }
             HStack(alignment: .bottom, spacing: 10) {
                 ForEach(0..<7) { index in
                     VStack(spacing: 5) {
@@ -287,7 +286,7 @@ struct YearComparisonCard: View {
                 var count = 0
                 var line = Path(); line.move(to: CGPoint(x: 0, y: size.height))
                 var last = CGPoint(x: 0, y: size.height)
-                for day in stats.days where day.date.hasPrefix("\(value)-") && String(day.date.suffix(5)) <= cutoff {
+                for day in stats.days(from: "\(value)-01-01", through: "\(value)-" + cutoff) {
                     count += day.contributionCount
                     last = CGPoint(x: position(String(day.date.suffix(5))) / end * size.width, y: size.height * (1 - Double(count) / maximum))
                     line.addLine(to: last)
