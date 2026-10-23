@@ -5,7 +5,14 @@ import GitGazeCore
 
 @main
 struct GitGazeApp {
-    @MainActor static func main() {
+    @MainActor static func main() throws {
+        if CommandLine.arguments.contains("--listener-smoke-test") {
+            // Exercise the real Dispatch listener without UI/Metal, credentials, or Git config writes.
+            let monitor = PushMonitor()
+            try monitor.start()
+            withExtendedLifetime(monitor) { RunLoop.main.run() }
+            return
+        }
         let app = NSApplication.shared
         let delegate = AppDelegate()
         app.delegate = delegate

@@ -36,7 +36,7 @@ jobs:
       - name: Exercise live Git listener
         run: |
           set -euo pipefail
-          .build/GitGaze.app/Contents/MacOS/GitGaze --enable-push-detection &
+          .build/GitGaze.app/Contents/MacOS/GitGaze --listener-smoke-test &
           PID=$!
           trap 'kill "$PID" 2>/dev/null || true' EXIT
           SOCKET="$HOME/Library/Caches/GitBar/push.sock"

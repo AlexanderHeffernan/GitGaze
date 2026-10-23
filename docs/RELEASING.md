@@ -4,7 +4,7 @@
 
 Every push to this repository's `main` runs `Check & Release`:
 
-1. Debug/release Swift tests, release-contract tests, app packaging, and native launch smoke checks run on Apple Silicon and Intel with Swift 6.2.4.
+1. Debug/release Swift tests, release-contract tests, app packaging, and native launch smoke checks run on Apple Silicon and Intel with Swift 6.2.4. A separate `--listener-smoke-test` process exercises the real Git socket listener without starting the dashboard, updater, or Metal rendering (which is unavailable on some hosted Intel runners); it does not change Git configuration.
 2. After both succeed, the **same checked-out commit** builds a universal macOS 14+ app.
 3. The release version starts at `CFBundleShortVersionString` in `Info.plist`. Later pushes increment the latest reachable stable tag's patch version. To select a higher major/minor version, raise the plist version. A rerun reuses the tag for its commit instead of inventing another version.
 4. Both bundled version fields are stamped in the build output; CI never commits generated version changes to `main`.
