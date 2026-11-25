@@ -9,7 +9,6 @@ using System;
 using System.Runtime.InteropServices;
 public static class TraySmoke {
     [StructLayout(LayoutKind.Sequential)] public struct Rect { public int L,T,R,B; }
-    [StructLayout(LayoutKind.Sequential)] public struct Icon { public int Size; public IntPtr Window; public uint Id; public Guid Guid; }
     [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr FindWindow(string cls, string title);
     [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr window, out uint pid);
     [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr window);
@@ -19,11 +18,6 @@ public static class TraySmoke {
     [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
     [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint x, uint y, uint data, IntPtr extra);
     [DllImport("user32.dll")] public static extern void keybd_event(byte key, byte scan, uint flags, IntPtr extra);
-    [DllImport("shell32.dll")] private static extern int Shell_NotifyIconGetRect(ref Icon id, out Rect rect);
-    public static Rect IconRect(IntPtr window) {
-        var id = new Icon { Size=Marshal.SizeOf<Icon>(), Window=window, Id=1 };
-        return Shell_NotifyIconGetRect(ref id, out Rect rect) == 0 ? rect : default(Rect);
-    }
 }
 '@
 
@@ -86,15 +80,11 @@ New-Item -ItemType Directory -Force $Evidence | Out-Null
 $Evidence = (Resolve-Path $Evidence).Path
 $app = Start-Process -FilePath (Resolve-Path $Exe) -ArgumentList '--fixture' -PassThru
 try {
-    $hostWindow = Wait-For 'GitGaze native tray host window' {
+    $null = Wait-For 'Explorer taskbar available while GitGaze runs' {
         $app.Refresh()
         if ($app.HasExited) { throw "GitGaze exited before showing its tray icon: $($app.ExitCode)" }
-        $hostWindow = [TraySmoke]::FindWindow($null, 'GitGaze tray')
-        if ($hostWindow -ne [IntPtr]::Zero) { $hostWindow }
+        [TraySmoke]::FindWindow('Shell_TrayWnd', $null) -ne [IntPtr]::Zero
     }
-    $anchor = [TraySmoke]::IconRect($hostWindow)
-    Write-Host "Pre-open icon bounds: $($anchor.L),$($anchor.T)–$($anchor.R),$($anchor.B)"
-    # The icon can be in closed overflow; its rectangle need not exist before overflow opens.
     Open-Tray
     $flyout = Wait-For 'native flyout shown by tray click' { Visible-Flyout }
     $null = Wait-For 'fixture content exposed by WebView2 accessibility' {
@@ -110,6 +100,10 @@ try {
     Open-Tray
     $null = Wait-For 'flyout to reopen on second tray click' { Visible-Flyout }
     Write-Host 'PASS: Explorer tray click, WebView2 fixture, foreground focus, Escape dismissal, second open.'
+} catch {
+    $app.Refresh()
+    if (!$app.HasExited -and $app.MainWindowHandle -ne [IntPtr]::Zero) { Capture-Flyout $app.MainWindowHandle }
+    throw
 } finally {
     if (!$app.HasExited) { Stop-Process -Id $app.Id }
 }
