@@ -23,7 +23,7 @@ try {
     Start-Process -FilePath $installer -ArgumentList '/S' -Wait
     $app = Join-Path $env:LOCALAPPDATA 'GitGaze\GitGaze.exe'
     if (Test-Path $app) { Start-Process $app }
-    Write-Host 'Installed GitGaze. Look for it in the notification area; updates install from Settings → Updates.'
+    Write-Host 'Installed GitGaze. Look for it in the notification area; updates install from Settings > Updates.'
 } finally {
     Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue
 }
