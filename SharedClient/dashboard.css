@@ -54,6 +54,16 @@ section:hover .tools, section:focus-within .tools, .tools.active { opacity:1; }
 .heat span[data-level='2'] { background:color-mix(in srgb, var(--accent) 42%, transparent); }
 .heat span[data-level='3'] { background:color-mix(in srgb, var(--accent) 67%, transparent); }
 .heat-dates .secondary { font-size:8px; }
+.week-summary { display:flex; align-items:baseline; gap:5px; }
+.previous-week { margin-inline-start:auto; }
+.week-chart { display:flex; justify-content:space-around; align-items:end; height:70px; }
+.week-day { display:grid; justify-items:center; gap:5px; }
+.week-day .secondary { font-size:8px; }
+.week-day .secondary:last-child { font-size:9px; }
+.records { align-items:baseline; }
+.personal-best { display:grid; gap:4px; }
+.best-number { font-size:26px; font-weight:500; letter-spacing:-1px; }
+.best-unit { font-size:8px; color:var(--muted); }
 .option { color:var(--muted); display:flex; justify-content:space-between; gap:6px; align-items:center; min-height:34px; }
 select { color:inherit; background:var(--bg); border:1px solid var(--edge); border-radius:5px; padding:4px; }
 footer { min-height:28px; padding:4px 22px; border-top:1px solid var(--edge); color:var(--muted); font-size:10px; }

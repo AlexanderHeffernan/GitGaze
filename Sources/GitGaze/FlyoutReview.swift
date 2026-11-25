@@ -272,6 +272,11 @@ extension AppDelegate {
             }
             try await review.capture(controller, to: output + "/\(mode)-flyout.png")
             if mode == "shared" {
+                let gallery = try await review.evaluate("document.querySelector('[aria-label=\"Add widgets\"]').click();[...document.querySelectorAll('.week-day')].map(day=>day.firstChild.textContent).join(',')+'|'+[...document.querySelectorAll('.best-number')].map(n=>n.textContent).join(',')") as? String
+                try require(gallery == "7,0,0,0,0,0,0|12,23,5", "Gallery must render Monday-first contributions and personal bests: \(gallery ?? "nil")")
+                await settle()
+                try await review.capture(controller, to: output + "/shared-gallery.png")
+                _ = try await review.evaluate("document.querySelector('[aria-label=\"Back to dashboard\"]').click();void 0")
                 let focused = try await review.evaluate("document.querySelector('[aria-label=\"Configure Contribution history\"]').click();document.activeElement.tagName") as? String
                 try require(focused == "SELECT", "Widget back should move focus into its native-styled selector")
                 await settle()

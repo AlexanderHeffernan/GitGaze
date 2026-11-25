@@ -131,6 +131,20 @@
     const field = el('label', 'option', label); field.append(input); return field;
   }
 
+  function momentumCard() {
+    const monday = core.monday(today);
+    const values = Array.from({ length:7 }, (_, i) => stats.count(core.offset(monday, i)));
+    const peak = Math.max(1, ...values);
+    const chart = group('week-chart', ...values.map((value, index) => {
+      const bar = svg('svg', { width:28, height:Math.max(3, 42 * value / peak), 'aria-hidden':'true' });
+      bar.append(svg('rect', { width:'100%', height:'100%', rx:3, fill:'var(--accent)', opacity:value ? .9 : .15 }));
+      return group('week-day', text(num(value)), bar, text('MTWTFSS'[index]));
+    }));
+    chart.title = 'Monday–Sunday · this week so far versus all of last week';
+    return group('', group('week-summary', text(num(stats.weekTotal), 'streak-number'), text('contributions'),
+      text(`${num(stats.lastWeekTotal)} last week`, 'secondary previous-week')), chart);
+  }
+
   const widgets = {
     today: { title:'Today', face:todayCard },
     streak: { title:'Streak', face:streakCard, settings:() => select('Reminder hour', Array.from({ length:24 }, (_, i) => [i, `${String(i).padStart(2, '0')}:00`]), prefs.reminderHour, h => change({ ...prefs, reminderHour:Number(h) })) },
@@ -142,8 +156,10 @@
       }).map(p => el('p', '', p.name || p.login));
       return group('', ...(rows.length ? rows : [text('No favourites in this fixture.') ]));
     } },
-    momentum: { title:'Weekly momentum', face:() => group('split', text(`${stats.weekTotal} this week`, 'large'), text(`${stats.lastWeekTotal} last week`)) },
-    records: { title:'Personal bests', face:() => group('split', text(`${stats.bestDay} day`), text(`${stats.bestWeek} week`), text(`${stats.longestStreak} streak`)) },
+    momentum: { title:'Weekly momentum', heading:'This week', face:momentumCard },
+    records: { title:'Personal bests', face:() => group('split records', ...[
+      ['Day', stats.bestDay, 'contributions'], ['Week', stats.bestWeek, 'contributions'], ['Streak', stats.longestStreak, 'days']
+    ].map(([title, value, unit]) => group('personal-best', text(title), text(num(value), 'best-number'), text(unit, 'best-unit')))) },
     people: { title:'People you follow', face:() => group('', ...data.following.map(p => el('p', '', p.name || p.login))) },
     years: { title:'Year in perspective', face:() => {
       const year = Number(today.slice(0, 4)), older = prefs.comparisonYear || year - 1;
