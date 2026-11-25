@@ -158,7 +158,7 @@ jobs:
 
   release:
     needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'AlexanderHeffernan/GitGaze'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'AlexanderHeffernan/Stoke'
     runs-on: macos-15
     permissions:
       contents: write

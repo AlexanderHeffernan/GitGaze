@@ -2,7 +2,7 @@
 # Install the latest public Stoke release for this user. No sudo or quarantine stripping.
 # Stoke was called GitGaze until 1.1.7; an installed GitGaze.app is replaced.
 set -euo pipefail
-REPO="AlexanderHeffernan/GitGaze"
+REPO="AlexanderHeffernan/Stoke"
 INSTALL_DIR="$HOME/Applications"
 # Asset names follow the product name, so read them from the release rather than hard-coding one.
 ARCHIVE="$(curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 "https://api.github.com/repos/$REPO/releases/latest" \

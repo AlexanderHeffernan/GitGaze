@@ -34,7 +34,7 @@ def verify_feed(directory, version):
     if item is None:
         raise ValueError("No update in appcast")
     enclosure = item.find("enclosure")
-    expected = f"https://github.com/AlexanderHeffernan/GitGaze/releases/download/v{version}/Stoke.zip"
+    expected = f"https://github.com/AlexanderHeffernan/Stoke/releases/download/v{version}/Stoke.zip"
     if enclosure is None or enclosure.get("url") != expected:
         raise ValueError("Update URL is not pinned to this release")
     if item.findtext(ns + "version") != version or not enclosure.get(ns + "edSignature"):

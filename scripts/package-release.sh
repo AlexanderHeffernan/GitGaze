@@ -9,7 +9,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 VERSION="${1:?Usage: package-release.sh VERSION ARTIFACTS OUTPUT}"
 ARTIFACTS="$(cd "${2:?}" && pwd)"
 OUT="${3:?}"
-BASE="https://github.com/AlexanderHeffernan/GitGaze/releases/download/v$VERSION"
+BASE="https://github.com/AlexanderHeffernan/Stoke/releases/download/v$VERSION"
 SPARKLE_VERSION=2.10.0
 rm -rf "$OUT" && mkdir -p "$OUT"
 OUT="$(cd "$OUT" && pwd)"
@@ -19,7 +19,7 @@ for file in Stoke.zip Stoke.app.tar.gz Stoke-windows-x64-setup.exe Stoke-windows
 done
 
 # Release notes from merged changes since the previous release.
-gh api --method POST "repos/AlexanderHeffernan/GitGaze/releases/generate-notes" \
+gh api --method POST "repos/AlexanderHeffernan/Stoke/releases/generate-notes" \
     -f tag_name="v$VERSION" -f target_commitish="${GITHUB_SHA:-HEAD}" --jq .body > "$OUT/notes.md" || echo "Stoke $VERSION" > "$OUT/notes.md"
 
 # Sparkle feed for existing 1.0.x installs, signed with Sparkle's own tool.
@@ -29,7 +29,7 @@ FEED="$(mktemp -d)"
 cp "$OUT/Stoke.zip" "$FEED/"
 cp "$OUT/notes.md" "$FEED/Stoke.md"
 printf '%s' "$SPARKLE_PRIVATE_KEY" | "$TOOLS/bin/generate_appcast" --ed-key-file - --embed-release-notes --maximum-deltas 0 \
-    --download-url-prefix "$BASE/" --link "https://github.com/AlexanderHeffernan/GitGaze" "$FEED"
+    --download-url-prefix "$BASE/" --link "https://github.com/AlexanderHeffernan/Stoke" "$FEED"
 cp "$FEED/appcast.xml" "$OUT/appcast.xml"
 python3 "$ROOT/scripts/release.py" verify "$OUT" "$VERSION"
 SIGNATURE="$(python3 -c "import re,sys; print(re.search(r'edSignature=\"([^\"]+)\"', open(sys.argv[1]).read()).group(1))" "$OUT/appcast.xml")"

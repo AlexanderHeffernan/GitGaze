@@ -2,8 +2,8 @@
 
 # Stoke
 
-[![Check & Release](https://github.com/AlexanderHeffernan/GitGaze/actions/workflows/check.yml/badge.svg)](https://github.com/AlexanderHeffernan/GitGaze/actions/workflows/check.yml)
-[![Latest release](https://img.shields.io/github/v/release/AlexanderHeffernan/GitGaze)](https://github.com/AlexanderHeffernan/GitGaze/releases/latest)
+[![Check & Release](https://github.com/AlexanderHeffernan/Stoke/actions/workflows/check.yml/badge.svg)](https://github.com/AlexanderHeffernan/Stoke/actions/workflows/check.yml)
+[![Latest release](https://img.shields.io/github/v/release/AlexanderHeffernan/Stoke)](https://github.com/AlexanderHeffernan/Stoke/releases/latest)
 
 **Your GitHub momentum, in your menu bar or system tray.**
 
@@ -33,10 +33,10 @@ Stoke reads your [GitHub CLI](https://cli.github.com/) session, so install it an
 Requires **macOS 14+**; release builds are universal (Apple Silicon and Intel). Install GitHub CLI with `brew install gh`, then use the per-user installer, which verifies the release checksum before replacing an existing copy:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/AlexanderHeffernan/GitGaze/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/AlexanderHeffernan/Stoke/main/install.sh | bash
 ```
 
-Or [download Stoke.zip](https://github.com/AlexanderHeffernan/GitGaze/releases/latest/download/Stoke.zip), unzip it, and move **Stoke.app** into Applications. The installer uses `~/Applications`, requires no administrator access, and does not clear macOS quarantine.
+Or [download Stoke.zip](https://github.com/AlexanderHeffernan/Stoke/releases/latest/download/Stoke.zip), unzip it, and move **Stoke.app** into Applications. The installer uses `~/Applications`, requires no administrator access, and does not clear macOS quarantine.
 
 **Apple signing status:** without configured Developer ID credentials, releases are ad-hoc signed and not notarised. macOS may block a browser-downloaded first installation. Use System Settings → Privacy & Security → Open Anyway only if you trust the release, or build from source.
 
@@ -45,10 +45,10 @@ Or [download Stoke.zip](https://github.com/AlexanderHeffernan/GitGaze/releases/l
 Requires **Windows 10 or 11** (x64 or ARM64) and the Edge WebView2 runtime, which Windows 11 includes and the installer fetches if missing. Install GitHub CLI with `winget install GitHub.cli`, then run in PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/AlexanderHeffernan/GitGaze/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/AlexanderHeffernan/Stoke/main/install.ps1 | iex
 ```
 
-Or download the installer for [x64](https://github.com/AlexanderHeffernan/GitGaze/releases/latest/download/Stoke-windows-x64-setup.exe) or [ARM64](https://github.com/AlexanderHeffernan/GitGaze/releases/latest/download/Stoke-windows-arm64-setup.exe). It installs for the current user without administrator access. Stoke appears in the notification area; Windows may hide new icons in the overflow until you pin it. The installer isn't code-signed yet, so SmartScreen may ask you to confirm.
+Or download the installer for [x64](https://github.com/AlexanderHeffernan/Stoke/releases/latest/download/Stoke-windows-x64-setup.exe) or [ARM64](https://github.com/AlexanderHeffernan/Stoke/releases/latest/download/Stoke-windows-arm64-setup.exe). It installs for the current user without administrator access. Stoke appears in the notification area; Windows may hide new icons in the overflow until you pin it. The installer isn't code-signed yet, so SmartScreen may ask you to confirm.
 
 ### Updates
 

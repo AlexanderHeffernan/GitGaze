@@ -1,8 +1,8 @@
 # Installs the latest Stoke release for this Windows user. No administrator access needed.
-#   irm https://raw.githubusercontent.com/AlexanderHeffernan/GitGaze/main/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/AlexanderHeffernan/Stoke/main/install.ps1 | iex
 # Stoke was called GitGaze until 1.1.7; on first launch Stoke removes an installed GitGaze.
 $ErrorActionPreference = 'Stop'
-$repo = 'AlexanderHeffernan/GitGaze'
+$repo = 'AlexanderHeffernan/Stoke'
 $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64' -or $env:PROCESSOR_ARCHITEW6432 -eq 'ARM64') { 'arm64' } else { 'x64' }
 # Asset names follow the product name, so read them from the release rather than hard-coding one.
 $release = Invoke-RestMethod -UseBasicParsing "https://api.github.com/repos/$repo/releases/latest"
