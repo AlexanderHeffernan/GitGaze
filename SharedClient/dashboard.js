@@ -80,10 +80,11 @@
     for (let i = -6; i <= 0; i++) {
       const date = core.offset(today, i), count = stats.count(date);
       const mark = el('span', count > 0 ? 'mark active' : 'mark');
-      mark.title = `${date} · ${count} contributions`;
+      mark.title = `${date}: ${count > 0 ? 'Active' : 'No contributions'}`;
       marks.append(mark);
     }
-    return group('split', group('split', text(num(stats.streak), 'large'), text('days')), marks, group('', text(num(stats.longestStreak), 'large'), text('best')));
+    return group('streak', group('streak-current', text(num(stats.streak), 'streak-number'), text('days')), marks,
+      group('streak-best', text(num(stats.longestStreak), 'streak-number'), text('best')));
   }
 
   function heatmap() {
@@ -120,7 +121,7 @@
 
   const widgets = {
     today: { title:'Today', face:todayCard },
-    streak: { title:'Your streak', face:streakCard, settings:() => select('Reminder hour', Array.from({ length:24 }, (_, i) => [i, `${String(i).padStart(2, '0')}:00`]), prefs.reminderHour, h => change({ ...prefs, reminderHour:Number(h) })) },
+    streak: { title:'Streak', face:streakCard, settings:() => select('Reminder hour', Array.from({ length:24 }, (_, i) => [i, `${String(i).padStart(2, '0')}:00`]), prefs.reminderHour, h => change({ ...prefs, reminderHour:Number(h) })) },
     heatmap: { title:'Contribution history', face:heatmap, settings:() => select('Visible history', [[26,'6 months'],[53,'Year']], prefs.historyWeeks, weeks => change({ ...prefs, historyWeeks:Number(weeks) })) },
     favourites: { title:'Favourite people', face:() => {
       const rows = data.following.filter(p => prefs.favourites.includes(p.login)).sort((a, b) => {
