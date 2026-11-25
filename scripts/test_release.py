@@ -68,10 +68,10 @@ class SigningTests(unittest.TestCase):
 
     def test_minisign_signature_records_version_and_verifies(self):
         os.environ["SPARKLE_PRIVATE_KEY"] = base64.b64encode(self.seed).decode()
-        with tempfile.NamedTemporaryFile() as payload:
-            payload.write(b"update")
-            payload.flush()
-            lines = base64.b64decode(sign_update.minisign_signature(payload.name, "1.2.3")).decode().splitlines()
+        with tempfile.TemporaryDirectory() as directory:
+            payload = Path(directory) / "update.bin"
+            payload.write_bytes(b"update")
+            lines = base64.b64decode(sign_update.minisign_signature(str(payload), "1.2.3")).decode().splitlines()
         self.assertTrue(lines[2].startswith("trusted comment: ") and lines[2].endswith("\tversion:1.2.3"))
         signature = base64.b64decode(lines[1])
         self.assertEqual(signature[:2], b"ED")
