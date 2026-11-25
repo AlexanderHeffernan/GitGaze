@@ -39,11 +39,13 @@
   }
 
   const widgetIds = ['today', 'streak', 'heatmap', 'favourites', 'momentum', 'records', 'people', 'years'];
-  const hiddenByDefault = widgetIds.slice(4);
-  function preferences(mac = {}) {
+  function preferences(mac = {}, registry = widgetIds.map((id, index) => ({ id, hiddenByDefault: index >= 4 }))) {
     const list = value => Array.isArray(value) ? value : [];
-    const order = [...new Set([...list(mac.modules), ...widgetIds])].filter(id => widgetIds.includes(id));
-    return { ...mac, modules: order, hidden: [...new Set(mac.hidden ? [...list(mac.hidden), ...(list(mac.modules).includes('years') ? [] : ['years'])] : hiddenByDefault)],
+    const ids = registry.map(widget => widget.id);
+    const order = [...new Set([...list(mac.modules), ...ids])].filter(id => ids.includes(id));
+    const hidden = registry.filter(({ id, hiddenByDefault }) => hiddenByDefault && (!mac.hidden ||
+      (!list(mac.modules).includes(id) && (id === 'years' || !widgetIds.includes(id))))).map(widget => widget.id);
+    return { ...mac, modules: order, hidden: [...new Set([...list(mac.hidden), ...hidden])].filter(id => ids.includes(id)),
       favourites: list(mac.favourites), favouriteOrder: list(mac.favouriteOrder), historyWeeks: mac.historyWeeks === 26 ? 26 : 53,
       reminderHour: Number.isInteger(mac.reminderHour) && mac.reminderHour >= 0 && mac.reminderHour < 24 ? mac.reminderHour : 18,
       appearance: ['system', 'light', 'dark'].includes(mac.appearance) ? mac.appearance : 'system' };

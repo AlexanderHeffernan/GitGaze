@@ -22,7 +22,8 @@
     return node;
   };
   const button = (text, label, fn, disabled = false) => {
-    const node = el('button', '', text);
+    const node = el('button', '', typeof text === 'string' ? text : undefined);
+    if (typeof text !== 'string') node.append(text);
     node.setAttribute('aria-label', label);
     node.title = label;
     node.disabled = disabled;
@@ -30,6 +31,11 @@
     return node;
   };
   const group = (css, ...children) => { const node = el('div', css); node.append(...children); return node; };
+  const icon = path => {
+    const graphic = svg('svg', { class:'action-icon', viewBox:'0 0 16 16', 'aria-hidden':'true' });
+    graphic.append(svg('path', { d:path, fill:'none', stroke:'currentColor', 'stroke-width':1.35, 'stroke-linecap':'round', 'stroke-linejoin':'round' }));
+    return graphic;
+  };
   const text = (s, css = 'secondary') => el('div', css, s);
   const num = n => n.toLocaleString();
   let data, prefs, today, stats, page = 'GitGaze', configuring, status = '', error, live;
@@ -128,7 +134,7 @@
   const widgets = {
     today: { title:'Today', face:todayCard },
     streak: { title:'Streak', face:streakCard, settings:() => select('Reminder hour', Array.from({ length:24 }, (_, i) => [i, `${String(i).padStart(2, '0')}:00`]), prefs.reminderHour, h => change({ ...prefs, reminderHour:Number(h) })) },
-    heatmap: { title:'Contribution history', face:heatmap, settings:() => select('Visible history', [[26,'6 months'],[53,'Year']], prefs.historyWeeks, weeks => change({ ...prefs, historyWeeks:Number(weeks) })) },
+    heatmap: { title:'Contribution history', heading:'Contributions', face:heatmap, settings:() => select('Visible history', [[26,'6 months'],[53,'Year']], prefs.historyWeeks, weeks => change({ ...prefs, historyWeeks:Number(weeks) })) },
     favourites: { title:'Favourite people', face:() => {
       const rows = data.following.filter(p => prefs.favourites.includes(p.login)).sort((a, b) => {
         const rank = p => { const i = prefs.favouriteOrder.indexOf(p.login); return i < 0 ? Infinity : i; };
@@ -144,12 +150,13 @@
       return group('split', text(`${num(stats.yearTotal)} in ${year}`, 'large'), text(`${num(stats.totalInYear(older, prefs.comparisonMode === 'full' ? undefined : today.slice(5)))} in ${older}`));
     } }
   };
+  const registry = Object.entries(widgets).map(([id, widget], index) => ({ id, hiddenByDefault: widget.hiddenByDefault ?? index >= 4 }));
 
   function widget(key, visible, gallery) {
-    const { title, face, settings } = widgets[key];
+    const { title, heading = title, face, settings } = widgets[key];
     const template = $('widget').content.cloneNode(true);
     const section = template.querySelector('section'), tools = section.querySelector('.tools');
-    section.querySelector('h2').textContent = title;
+    section.querySelector('h2').textContent = heading;
     section.dataset.widget = key;
     if (key === 'today' && !gallery) {
       const date = new Date(`${today}T12:00:00`);
@@ -180,8 +187,10 @@
     const actions = $('actions');
     $('title').textContent = page;
     document.documentElement.dataset.mode = prefs.appearance;
-    actions.replaceChildren(...(page === 'GitGaze' ? [button('+', 'Add widgets', () => navigate('Add widgets')),
-      button('↻', 'Refresh', refresh, !live), button('☷', 'Settings', () => navigate('Settings'))] : [button('↶ Back', 'Back to dashboard', () => navigate('GitGaze'))]));
+    actions.replaceChildren(...(page === 'GitGaze' ? [button(icon('M8 3v10M3 8h10'), 'Add widgets', () => navigate('Add widgets')),
+      button(icon('M12.5 6a5 5 0 1 0 .2 4M12.5 2.8V6H9.3'), 'Refresh', refresh, !live),
+      button(icon('M2.5 4h3m3 0h5m-8-1.4v2.8M2.5 8h6m3 0h2m-5-1.4v2.8M2.5 12h2m3 0h6m-9-1.4v2.8'), 'Settings', () => navigate('Settings'))] :
+      [button('↶ Back', 'Back to dashboard', () => navigate('GitGaze'))]));
     main.classList.toggle('gallery', page === 'Add widgets');
     main.replaceChildren();
     if (error) main.append(text(error, 'metric record'));
@@ -205,7 +214,7 @@
 
   window.gitGazeReceive = snapshot => {
     data = snapshot.dashboard;
-    prefs = core.preferences(snapshot.preferences);
+    prefs = core.preferences(snapshot.preferences, registry);
     today = snapshot.today || core.localDay(new Date());
     stats = data ? core.statistics([...data.history, ...data.profile.days], today) : null;
     status = snapshot.status || (data ? 'Cached activity' : 'Not connected');
@@ -216,7 +225,7 @@
   window.gitGazeOpen = () => navigate('GitGaze');
   window.gitGazeStart = () => {
     if (window !== window.top || activity) return;
-    activity = globalThis.gitGazeActivity({ request, core, onChange:window.gitGazeReceive });
+    activity = globalThis.gitGazeActivity({ request, core, registry, onChange:window.gitGazeReceive });
     void activity.start();
     setInterval(() => void activity.refresh({ background:true }), 30000);
   };

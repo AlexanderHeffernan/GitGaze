@@ -10,7 +10,7 @@
       totalContributions: contributionCalendar.totalContributions, days: contributionCalendar.weeks.flatMap(w => w.contributionDays) };
   }
 
-  function activity({ request, core, onChange, onVerifiedRefresh, now = () => new Date() }) {
+  function activity({ request, core, onChange, onVerifiedRefresh, registry, now = () => new Date() }) {
     let prefs, dashboard, error, pending = false, attempted = -Infinity, historyAt = -Infinity, followingAt = -Infinity, knownViewer, extension;
     const today = () => core.localDay(now());
     const snapshot = () => ({ today: today(), dashboard, preferences: prefs, live: true,
@@ -84,8 +84,8 @@
         try {
           const local = await request('readLocal');
           dashboard = local.dashboard;
-          prefs = core.preferences(local.preferences);
-        } catch (e) { prefs = core.preferences(); error = e.message; }
+          prefs = core.preferences(local.preferences, registry);
+        } catch (e) { prefs = core.preferences(undefined, registry); error = e.message; }
         publish();
         await refresh({ force:true });
       },
