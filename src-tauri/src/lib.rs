@@ -176,7 +176,7 @@ fn celebrate(app: AppHandle, count: u32, record: bool, sample: bool, style: Stri
     let id = CELEBRATION.fetch_add(1, Ordering::SeqCst) + 1;
     let _ = window.set_ignore_cursor_events(true);
     let _ = window.emit("celebrate", json!({ "count": count, "record": record, "sample": sample, "style": style, "anchor": anchor, "reduced": reduced,
-        "accent": colors["accent"], "accentSoft": colors["accentSoft"], "gold": colors["gold"] }));
+        "fromBelow": cfg!(windows), "accent": colors["accent"], "accentSoft": colors["accentSoft"], "gold": colors["gold"] }));
     window.show().map_err(|e| e.to_string())?;
     std::thread::spawn(move || {
         std::thread::sleep(Duration::from_secs(6));

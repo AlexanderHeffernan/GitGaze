@@ -74,7 +74,7 @@ popover.addEventListener('load', connect);
 // The app asks its native shell to show celebrations; in a browser it posts them here instead.
 addEventListener('message', ({ data, origin }) => {
   if (origin !== location.origin || data?.gitgaze !== 'celebrate') return;
-  celebrate(burst, data.args, anchorX);
+  celebrate(burst, { ...data.args, fromBelow: platform === 'windows' }, anchorX);
 });
 
 function celebrate(frame, args, anchor) {

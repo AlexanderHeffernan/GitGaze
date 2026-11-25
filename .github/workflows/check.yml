@@ -2,6 +2,8 @@ name: Check & Release
 on:
   push:
     branches: [main]
+    # Site, hosting and docs changes deploy from the Pi; they don't need an app release.
+    paths-ignore: ['site/**', 'deploy/**', '**.md']
   pull_request:
     branches: [main]
 permissions:

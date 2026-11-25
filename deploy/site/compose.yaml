@@ -5,10 +5,11 @@ services:
   web:
     image: nginx:1.29-alpine
     restart: unless-stopped
-    ports: ["127.0.0.1:3013:80"]
+    ports: ["127.0.0.1:3014:80"]
     volumes:
       - ./repo:/srv/repo:ro
-      - ./repo/deploy/site/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # A directory, not the file: git replaces nginx.conf on update, and a file mount would pin the old one.
+      - ./repo/deploy/site:/etc/nginx/conf.d:ro
   tunnel:
     image: cloudflare/cloudflared:2026.10.6
     restart: unless-stopped

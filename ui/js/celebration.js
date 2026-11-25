@@ -44,11 +44,12 @@ function dot(x, y, r, color, alpha) {
   ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
 }
 
-function fireworks(t, center, c) {
+/** The rocket rises from the tray: down from the macOS menu bar, up from the Windows taskbar. */
+function fireworks(t, center, c, fromBelow) {
   if (t < 0.7) {
-    const p = Math.min(1, t / 0.7);
+    const p = Math.min(1, t / 0.7), start = fromBelow ? H + 10 : -10;
     for (let ember = 0; ember < 12; ember++) {
-      const y = -10 + (center.y + 10) * (1 - (1 - Math.max(0, p - ember * 0.013)) ** 3);
+      const y = start + (center.y - start) * (1 - (1 - Math.max(0, p - ember * 0.013)) ** 3);
       dot(center.x, y, Math.max(0.6, 3.6 - ember * 0.23), ember === 0 ? '#fff' : c.accent, 1 - ember / 13);
     }
   }
@@ -145,7 +146,7 @@ function mask() {
   ctx.globalCompositeOperation = 'source-over';
 }
 
-listen('celebrate', ({ count, record, style, anchor, reduced, accent, accentSoft, gold }) => {
+listen('celebrate', ({ count, record, style, anchor, reduced, accent, accentSoft, gold, fromBelow }) => {
   const id = ++run;
   const colors = { accent, accentSoft, gold, record };
   if (reduced) {
@@ -168,7 +169,7 @@ listen('celebrate', ({ count, record, style, anchor, reduced, accent, accentSoft
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
     ctx.clearRect(0, 0, W, H);
     if (t < 4.7) {
-      if (style === 'fireworks') fireworks(t, center, colors); else alternate(t, style, colors);
+      if (style === 'fireworks') fireworks(t, center, colors, fromBelow); else alternate(t, style, colors);
       number(t, glyph, center, style, colors);
       mask();
       requestAnimationFrame(frame);
