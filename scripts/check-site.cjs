@@ -1,0 +1,103 @@
+// Run against `python3 -m http.server --directory site 8000` (see CONTRIBUTING.md).
+const assert = require('node:assert/strict');
+const { readFileSync } = require('node:fs');
+const { join } = require('node:path');
+const { chromium, webkit, devices } = require('playwright');
+const axe = require.resolve('axe-core/axe.min.js');
+
+const url = process.argv[2] || 'http://localhost:8000/';
+const readme = readFileSync(join(__dirname, '../README.md'), 'utf8');
+const command = readme.match(/^curl -fsSL .*\/install\.sh \| bash$/m)[0];
+const archive = readme.match(/https:\/\/[^)]+\/releases\/latest\/download\/GitGaze\.zip/)[0];
+
+async function checkCopy(page, action) {
+  const copy = page.getByRole('button', { name: 'Copy command' });
+  await action(copy);
+  await page.getByRole('status').getByText('Command copied.', { exact: true }).waitFor();
+}
+
+async function audit(page, label) {
+  await page.addScriptTag({ path: axe });
+  const violations = await page.evaluate(async () => (await axe.run({
+    runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] },
+  })).violations.map(({ id, nodes }) => ({ id, targets: nodes.map(node => node.target) })));
+  assert.deepEqual(violations, [], label);
+}
+
+async function main() {
+  const desktop = await chromium.launch({ executablePath: process.env.CHROME_PATH });
+  try {
+    const page = await desktop.newPage({ permissions: ['clipboard-read', 'clipboard-write'] });
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    page.on('response', response => { if (!response.ok()) errors.push(`${response.status()} ${response.url()}`); });
+    assert.equal((await page.goto(url)).status(), 200);
+    assert.equal(await page.locator('#install-command').textContent(), command);
+    assert.equal(await page.getByRole('link', { name: 'Download ZIP' }).getAttribute('href'), archive);
+    await page.getByRole('img', { name: /Illustrated GitGaze menu.*sample data/ }).waitFor();
+
+    for (const width of [320, 390, 540, 541, 768, 780, 781, 1024, 1280, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      const layout = await page.evaluate(() => {
+        const bounds = selector => document.querySelector(selector).getBoundingClientRect();
+        const copy = bounds('.hero-copy');
+        const preview = bounds('.preview');
+        return {
+          fits: document.documentElement.scrollWidth === innerWidth,
+          sideBySide: preview.left >= copy.right && preview.top < copy.bottom,
+          stacked: preview.top >= copy.bottom,
+          commandFits: document.querySelector('pre').scrollWidth === document.querySelector('pre').clientWidth,
+        };
+      });
+      assert(layout.fits && layout.commandFits && (width <= 780 ? layout.stacked : layout.sideBySide), `${width}px: ${JSON.stringify(layout)}`);
+    }
+    await audit(page, 'Desktop axe violations');
+    await page.keyboard.press('Tab');
+    assert.equal(await page.locator(':focus').textContent(), 'Skip to content');
+    await page.keyboard.press('Enter');
+    assert.equal(await page.locator(':focus').getAttribute('id'), 'main');
+    await page.keyboard.press('Tab');
+    assert.match(await page.locator(':focus').textContent(), /Get GitGaze/);
+    assert.notEqual(await page.locator(':focus').evaluate(el => getComputedStyle(el).outlineStyle), 'none');
+    await page.keyboard.press('Enter');
+    assert.equal(new URL(page.url()).hash, '#install');
+    assert.equal(await page.locator(':focus').getAttribute('id'), 'install');
+    await page.keyboard.press('Tab'); // GitHub CLI link
+    await page.keyboard.press('Tab');
+    assert.equal(await page.locator(':focus').textContent(), 'Copy command');
+    await checkCopy(page, () => page.keyboard.press('Enter'));
+    assert.equal(await page.evaluate(() => navigator.clipboard.readText()), command);
+    assert.deepEqual(errors, []);
+    console.log('Chromium: 10 widths, axe, skip link, visible focus, anchor, and exact keyboard clipboard copy passed');
+
+    const blocked = await desktop.newPage({ permissions: ['clipboard-read'] });
+    await blocked.goto(url);
+    await blocked.getByRole('button', { name: 'Copy command' }).click();
+    await blocked.getByRole('status').getByText('Couldn’t copy. Select the command and copy it manually.').waitFor();
+    const noScript = await desktop.newPage({ javaScriptEnabled: false });
+    await noScript.goto(url);
+    await noScript.getByRole('link', { name: 'Get GitGaze' }).click();
+    assert.equal(new URL(noScript.url()).hash, '#install');
+    assert.equal(await noScript.locator('#install-command').textContent(), command);
+    assert.equal(await noScript.getByRole('button', { name: 'Copy command' }).count(), 0);
+    console.log('Chromium: clipboard denial and no-JavaScript manual install passed');
+  } finally {
+    await desktop.close();
+  }
+
+  const mobile = await webkit.launch();
+  try {
+    const page = await mobile.newPage(devices['iPhone 14']);
+    await page.goto(url);
+    assert(await page.evaluate(() => matchMedia('(pointer: coarse)').matches && document.documentElement.scrollWidth === innerWidth));
+    await audit(page, 'Mobile axe violations');
+    await page.getByRole('link', { name: 'Get GitGaze' }).tap();
+    assert.equal(new URL(page.url()).hash, '#install');
+    await checkCopy(page, copy => copy.tap());
+    console.log('WebKit iPhone 14 emulation: coarse pointer, reflow, axe, touch install and copy confirmation passed');
+  } finally {
+    await mobile.close();
+  }
+}
+
+main().catch(error => { console.error(error); process.exitCode = 1; });

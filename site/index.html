@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="See your GitHub contributions, streaks, and personal bests in your Mac’s menu bar. GitGaze is free and open source.">
+  <meta name="theme-color" content="#111016">
+  <title>GitGaze — GitHub activity, one glance away</title>
+  <link rel="icon" href="./mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./style.css">
+  <script src="./install.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="wrap topbar">
+    <a class="brand" href="./"><img src="./mark.svg" width="32" height="32" alt="">GitGaze</a>
+    <a class="quiet-link" href="https://github.com/AlexanderHeffernan/GitGaze">GitHub <span aria-hidden="true">↗</span></a>
+  </header>
+
+  <main id="main" tabindex="-1" class="wrap">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="signal" aria-hidden="true"></span> A native Mac menu bar app</p>
+        <h1 id="hero-title">GitHub activity,<br class="wide-break"> <em>one glance away.</em></h1>
+        <p class="intro">See today’s contributions, keep your streak going, and find out how close you are to a personal best. All without opening a browser.</p>
+        <a class="primary" href="#install">Get GitGaze <span aria-hidden="true">↓</span></a>
+        <p class="platform">Free and open source <span aria-hidden="true">·</span> macOS 14+</p>
+      </div>
+
+      <figure class="preview">
+        <div class="scene" role="img" aria-label="Illustrated GitGaze menu and dashboard with sample data: 12 contributions today, 7 more to beat the daily best, a 14-day streak, and a year of contributions in a violet heatmap.">
+          <div class="menubar" aria-hidden="true">
+            <span class="menu-name">GitGaze</span>
+            <span class="menu-item"><img src="./mark.svg" width="17" height="17" alt="">12 <span class="menu-streak">· 14d</span></span>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M3 9a14 14 0 0 1 18 0M6 13a9 9 0 0 1 12 0m-9 4a4.5 4.5 0 0 1 6 0m-3 3h.01"/></svg>
+            <span class="menu-time">9:41</span>
+          </div>
+          <div class="app-panel" aria-hidden="true">
+            <div class="app-head"><b>GitGaze</b><svg viewBox="0 0 75 16" width="75" height="16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h10M8 3v10m26-6a5 5 0 1 1 1 5m-1-9v4h4m22-2h13m-13 6h13m-9-8v4m5 2v4"/></svg></div>
+            <div class="app-body">
+              <div class="widget">
+                <div class="widget-heading">Today <span>Nov 25</span></div>
+                <div class="today">
+                  <div class="dial"><strong>12</strong><small>today</small></div>
+                  <div><div class="micro">Daily best</div><div class="metric">18 <small>contributions</small></div><div class="to-beat">7 to beat it</div></div>
+                </div>
+              </div>
+              <div class="widget">
+                <div class="widget-heading">Streak</div>
+                <div class="streak"><div class="metric">14 <small>days</small></div><div class="streak-bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="best">28 <small>best</small></div></div>
+              </div>
+              <div class="widget">
+                <div class="widget-heading">Contributions</div>
+                <div class="metric history">1,842 <small>past year</small></div>
+                <svg class="heatmap" viewBox="0 0 318 50" preserveAspectRatio="none">
+                  <defs><pattern id="cells" width="6" height="7" patternUnits="userSpaceOnUse"><rect width="4.6" height="5.6" rx=".85" fill="#30303a"/></pattern></defs>
+                  <rect width="318" height="50" fill="url(#cells)"/>
+                  <g fill="none" stroke-width="5.6" stroke-dasharray="4.6 1.4">
+                    <path stroke="#564581" d="M6 2.8h24m18 0h12m36 0h48m18 0h12m36 0h24m30 0h18m18 0h12M18 9.8h12m30 0h36m30 0h24m24 0h30m24 0h36m24 0h30M0 16.8h36m24 0h24m24 0h12m54 0h36m6 0h30m18 0h18m12 0h24M12 23.8h12m24 0h24m30 0h48m18 0h24m24 0h24m12 0h30m18 0h18M0 30.8h18m24 0h42m18 0h12m36 0h24m36 0h18m48 0h36M24 37.8h24m18 0h12m18 0h36m24 0h12m24 0h30m24 0h36m6 0h24M6 44.8h18m18 0h18m36 0h36m24 0h24m30 0h24m30 0h12m12 0h30"/>
+                    <path stroke="#8068bd" d="M12 2.8h12m96 0h12m96 0h6m36 0h12M66 9.8h18m96 0h12m48 0h12m48 0h12M12 16.8h12m48 0h12m114 0h12m18 0h12m66 0h12M54 23.8h12m54 0h24m78 0h12m42 0h6m24 0h12M48 30.8h12m12 0h12m72 0h18m114 0h18M30 37.8h12m66 0h12m90 0h12m48 0h12m18 0h12M54 44.8h6m60 0h12m42 0h6m42 0h12m72 0h12"/>
+                    <path stroke="#b09cff" d="M120 2.8h6m150 0h6M72 9.8h6m108 0h6m114 0h6M18 16.8h6m210 0h6m72 0h6M132 23.8h12m84 0h6m78 0h6M78 30.8h6m78 0h6m132 0h6M114 37.8h6m96 0h6m84 0h6M228 44.8h6m78 0h6"/>
+                  </g>
+                </svg>
+              </div>
+            </div>
+            <div class="app-foot"><span><i class="signal"></i> Updated now</span><span>@octocat</span></div>
+          </div>
+        </div>
+        <figcaption>GitGaze dashboard <span aria-hidden="true">/</span> Illustrated with sample data</figcaption>
+      </figure>
+    </section>
+
+    <section class="benefits" aria-label="What GitGaze shows you">
+      <article>
+        <svg class="benefit-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></svg>
+        <h2>Know what counts.</h2>
+        <p>See your GitHub contributions, not just commits, including private activity your account can see.</p>
+      </article>
+      <article>
+        <svg class="benefit-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4 18v-4m4 4V9m4 9v-7m4 7V6m4 12V3"/></svg>
+        <h2>Keep your momentum.</h2>
+        <p>Track your streak, chase your own records, and compare this year’s pace with a previous year.</p>
+      </article>
+      <article>
+        <svg class="benefit-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 20v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2m1-15a3 3 0 0 1 0 6m5 9v-2a4 4 0 0 0-3-3.9"/></svg>
+        <h2>Keep up with your people.</h2>
+        <p>Pin favourites and see how active the people you follow have been, right in your dashboard.</p>
+      </article>
+    </section>
+
+    <section class="install" id="install" tabindex="-1" aria-labelledby="install-title">
+      <div>
+        <p class="eyebrow"><span class="signal" aria-hidden="true"></span> Install on Mac</p>
+        <h2 id="install-title">Make it yours.</h2>
+        <p>For macOS 14 and later, on Apple Silicon and Intel. Install <a href="https://cli.github.com/">GitHub CLI</a> and sign in first with <code>gh auth login --hostname github.com</code>.</p>
+      </div>
+      <div class="installer">
+        <div class="terminal">
+          <div class="terminal-head"><span>Terminal</span><button type="button" id="copy-install" hidden>Copy command</button></div>
+          <pre><code id="install-command">curl -fsSL https://raw.githubusercontent.com/AlexanderHeffernan/GitGaze/main/install.sh | bash</code></pre>
+        </div>
+        <p class="copy-status" id="copy-status" role="status"></p>
+        <p class="install-note">Verifies the release checksum and installs in <code>~/Applications</code>. No administrator access needed.</p>
+        <div class="install-links">
+          <a href="https://github.com/AlexanderHeffernan/GitGaze/releases/latest/download/GitGaze.zip">Download ZIP <span aria-hidden="true">↓</span></a>
+          <a href="https://github.com/AlexanderHeffernan/GitGaze/blob/main/install.sh">Inspect installer <span aria-hidden="true">↗</span></a>
+          <a href="https://github.com/AlexanderHeffernan/GitGaze#get-started">Setup &amp; signing notes <span aria-hidden="true">↗</span></a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="wrap footer">
+    <span>GitGaze · No analytics, no app backend.</span>
+    <a href="https://github.com/AlexanderHeffernan/GitGaze/blob/main/LICENSE">MIT license <span aria-hidden="true">↗</span></a>
+  </footer>
+</body>
+</html>
