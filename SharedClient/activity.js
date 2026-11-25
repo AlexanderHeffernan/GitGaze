@@ -13,8 +13,9 @@
   function activity({ request, core, onChange, onVerifiedRefresh, onViewerFailure, registry, now = () => new Date() }) {
     let prefs, dashboard, error, pending = false, attempted = -Infinity, historyAt = -Infinity, followingAt = -Infinity, knownViewer, extension;
     let peopleLimit = 12, peopleBusy = false, peopleRequested = false, generation = 0;
+    let systemSettings;
     const today = () => core.localDay(now());
-    const snapshot = () => ({ today: today(), dashboard, preferences: prefs, live: true,
+    const snapshot = () => ({ today: today(), dashboard, preferences: prefs, live: true, systemSettings,
       status: pending ? 'Refreshing…' : error ? dashboard ? 'Cached activity · refresh failed' : 'Not connected' : dashboard ? 'Updated' : 'Not connected', error });
     const publish = () => onChange(snapshot());
     const cache = async () => { await request('writeCache', dashboard); };
@@ -118,6 +119,7 @@
           const local = await request('readLocal');
           dashboard = local.dashboard;
           prefs = core.preferences(local.preferences, registry);
+          systemSettings = local.systemSettings;
         } catch (e) { prefs = core.preferences(undefined, registry); error = e.message; }
         publish();
         await refresh({ force:true });
@@ -130,6 +132,10 @@
         prefs = value;
         try { await request('writePreferences', changes); }
         catch (e) { error = e.message; publish(); }
+      },
+      async systemSetting(key, value) {
+        systemSettings = await request('systemSetting', { key, value });
+        publish();
       },
       refresh, snapshot, loadPeople
     };

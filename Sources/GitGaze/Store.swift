@@ -69,6 +69,9 @@ final class Store: ObservableObject {
     private var celebrationTask: Task<Void, Never>?
     private var increases = ContributionIncreaseTracker()
     var changed: (() -> Void)?
+    #if DEBUG
+    var sharedPushRefresh: (() -> Void)?
+    #endif
     private let defaults: UserDefaults
     private var token: String?
     private var refreshTask: Task<Void, Never>?
@@ -187,6 +190,9 @@ final class Store: ObservableObject {
         }
         pushMonitor.onPush = { [weak self] in
             self?.lastDetectedPush = Date()
+            #if DEBUG
+            if let refresh = self?.sharedPushRefresh { refresh(); return }
+            #endif
             self?.checkAfterLocalActivity()
         }
         if detectPushes {

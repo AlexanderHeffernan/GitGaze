@@ -69,7 +69,10 @@ section:hover .tools, section:focus-within .tools, .tools.active { opacity:1; }
 .person-row + .person-row { border-top:1px solid var(--edge); }
 .person-name { display:grid; grid-template-columns:21px minmax(0,1fr); align-items:center; gap:4px; }
 .avatar { border-radius:50%; background:color-mix(in srgb, var(--accent) 20%, transparent); display:grid; place-items:center; width:21px; height:21px; font-size:10px; }
+.avatar img { width:100%; height:100%; border-radius:inherit; object-fit:cover; }
 .person-title { font-size:10px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+a.person-title { color:inherit; text-decoration:none; }
+a.person-title:hover, a.person-title:focus-visible { text-decoration:underline; }
 .person-metrics { display:grid; grid-column:1/-1; grid-template-columns:repeat(4,1fr); gap:5px; }
 .person-metrics .secondary { font-size:7px; margin-top:3px; }
 .person-mini, .person-full { background:color-mix(in srgb, var(--accent) 4%, transparent); padding:4px; }
@@ -84,6 +87,11 @@ section:hover .tools, section:focus-within .tools, .tools.active { opacity:1; }
 .palette-options button { font-size:9px; }
 .palette-options button::before { content:''; display:block; width:20px; height:20px; margin:0 auto 4px; border-radius:50%; background:var(--swatch); }
 .palette-options button[aria-pressed='true'] { border-color:var(--accent); }
+.settings-choices { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; margin-top:8px; }
+.settings-choices button { background:color-mix(in srgb,var(--text) 3%,transparent); border-color:var(--edge); min-height:32px; }
+.settings-choices button[aria-pressed='true'] { border-color:var(--accent); background:color-mix(in srgb,var(--accent) 9%,transparent); }
+.settings-confirm { border:1px solid var(--edge); border-radius:8px; padding:10px; }
+.option input[type='checkbox'] { accent-color:var(--accent); }
 .week-chart { display:flex; justify-content:space-around; align-items:end; height:70px; }
 .week-day { display:grid; justify-items:center; gap:5px; }
 .week-day .secondary { font-size:8px; }

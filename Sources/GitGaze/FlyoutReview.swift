@@ -2,6 +2,7 @@
 import AppKit
 import CoreFoundation
 import GitGazeCore
+import UserNotifications
 import WebKit
 
 struct FlyoutFixture: Decodable {
@@ -29,6 +30,10 @@ struct FlyoutFixture: Decodable {
         let bytes = try Data(contentsOf: root.appendingPathComponent("fixture.json"))
         fixture = try JSONDecoder().decode(FlyoutFixture.self, from: bytes)
         snapshot = try JSONSerialization.jsonObject(with: bytes) as! [String: Any]
+        if local == nil {
+            snapshot["systemSettings"] = ["detectPushes": false, "launchAtLogin": false, "notifications": false,
+                "automaticUpdates": true, "checkUpdates": false, "streakReminder": false, "version": "Fixture"] as [String: Any]
+        }
     }
 
     func controller(close: @escaping () -> Void) -> NSViewController {
@@ -47,7 +52,11 @@ struct FlyoutFixture: Decodable {
         web.appearance = NSAppearance(named: .aqua)
         view = web
         let controller = NSViewController()
-        controller.view = web
+        let container = NSView(frame: web.frame)
+        web.autoresizingMask = [.width, .height]
+        container.addSubview(web)
+        controller.view = container
+        controller.preferredContentSize = container.frame.size
         if local != nil { liveController = controller }
         web.loadFileURL(root.appendingPathComponent("dashboard.html"), allowingReadAccessTo: root)
         phases.append("load submitted: \(started.duration(to: .now))")
@@ -60,7 +69,14 @@ struct FlyoutFixture: Decodable {
     }
 
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
-        isDashboard(navigationAction.request.url) ? .allow : .cancel
+        if isDashboard(navigationAction.request.url) { return .allow }
+        if local?.credentials == true, navigationAction.navigationType == .linkActivated,
+           navigationAction.sourceFrame.isMainFrame, isDashboard(navigationAction.sourceFrame.request.url),
+           let url = navigationAction.request.url,
+           url.absoluteString.wholeMatch(of: /https:\/\/github\.com\/[A-Za-z0-9][A-Za-z0-9-]{0,38}/) != nil {
+            NSWorkspace.shared.open(url)
+        }
+        return .cancel
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: any Error) {
@@ -102,9 +118,15 @@ struct FlyoutFixture: Decodable {
         try await view?.evaluateJavaScript(source)
     }
 
+    @discardableResult func refresh(force: Bool = true) -> Bool {
+        guard local?.credentials == true, let view else { return false }
+        view.evaluateJavaScript("window.gitGazeRefresh?.(\(force))", completionHandler: nil)
+        return true
+    }
+
     func capture(_ controller: NSViewController, to path: String) async throws {
         let image: NSBitmapImageRep?
-        if let web = controller.view as? WKWebView {
+        if let web = view, web.superview === controller.view {
             let snapshot = try await web.takeSnapshot(configuration: nil)
             image = snapshot.tiffRepresentation.flatMap(NSBitmapImageRep.init(data:))
         } else {
@@ -122,12 +144,14 @@ struct FlyoutFixture: Decodable {
     let cache: URL
     let defaults: UserDefaults
     let credentials: Bool
+    private weak var store: Store?
     private var token: String?
 
-    init(cache: URL, defaults: UserDefaults, credentials: Bool = true) {
+    init(cache: URL, defaults: UserDefaults, credentials: Bool = true, store: Store? = nil) {
         self.cache = cache
         self.defaults = defaults
         self.credentials = credentials
+        self.store = store
     }
 
     private static let keys = ["modules", "hidden", "favourites", "favouriteOrder", "palette", "customLight", "customDark", "menuStyle", "menuStreak",
@@ -135,6 +159,9 @@ struct FlyoutFixture: Decodable {
     private static func valid(_ key: String, _ value: Any) -> Bool {
         switch key {
         case "appearance": return ["system", "light", "dark"].contains(value as? String ?? "")
+        case "menuStyle": return MenuStyle(rawValue: value as? String ?? "") != nil
+        case "celebrationStyle": return CelebrationStyle(rawValue: value as? String ?? "") != nil
+        case "visualCelebrations", "menuStreak": return (value as? NSNumber).map { CFGetTypeID($0) == CFBooleanGetTypeID() } ?? false
         case "palette": return Palette(rawValue: value as? String ?? "") != nil
         case "customLight", "customDark": return (value as? String)?.wholeMatch(of: /[0-9A-Fa-f]{6}/) != nil
         case "historyWeeks": return [26, 53].contains(value as? Int ?? 0)
@@ -166,12 +193,41 @@ struct FlyoutFixture: Decodable {
             let dashboard = data.flatMap { bytes in
                 (try? JSONDecoder().decode(Dashboard.self, from: bytes)) == nil ? nil : try? JSONSerialization.jsonObject(with: bytes)
             }
-            return ["preferences": prefs, "dashboard": dashboard ?? NSNull()]
+            return ["preferences": prefs, "dashboard": dashboard ?? NSNull(), "systemSettings": systemSettings()]
         case "writePreferences":
             guard let prefs = args as? [String: Any], prefs.allSatisfy({ Self.valid($0.key, $0.value) }) else { throw CocoaError(.validationMissingMandatoryProperty) }
             for (key, value) in prefs {
                 defaults.set(value, forKey: key)
+                switch key {
+                case "menuStyle": store?.menuStyle = value as! String
+                case "palette": store?.palette = value as! String
+                case "customLight": store?.customLight = value as! String
+                case "customDark": store?.customDark = value as! String
+                case "celebrationStyle": store?.celebrationStyle = value as! String
+                case "visualCelebrations": store?.visualCelebrations = value as! Bool
+                case "reminderHour": store?.reminderHour = value as! Int
+                case "menuStreak": store?.changed?()
+                default: break
+                }
             }
+        case "systemSetting":
+            guard let store, let input = args as? [String: Any], let key = input["key"] as? String else {
+                throw GitHubError.message("Native setting is unavailable.")
+            }
+            let value = input["value"] as? NSNumber
+            let enabled = value.flatMap { CFGetTypeID($0) == CFBooleanGetTypeID() ? $0.boolValue : nil }
+            switch (key, enabled) {
+            case ("launchAtLogin", .some(let enabled)): store.toggleLaunchAtLogin(enabled)
+            case ("detectPushes", .some(let enabled)): store.enablePushDetection(enabled)
+            case ("automaticUpdates", .some(let enabled)): store.updates.setAutomatic(enabled)
+            case ("notifications", .some(let enabled)), ("streakReminder", .some(let enabled)):
+                let granted = enabled ? try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) : false
+                if key == "notifications" { store.notifications = granted } else { store.reminder = granted }
+            case ("checkUpdates", nil): store.updates.check()
+            case ("sampleCelebration", nil): store.showCelebration(count: 3, record: false, sample: true)
+            default: throw GitHubError.message("Unsupported native setting.")
+            }
+            return systemSettings()
         case "writeCache":
             guard let args, JSONSerialization.isValidJSONObject(args) else { throw CocoaError(.fileWriteUnknown) }
             let bytes = try JSONSerialization.data(withJSONObject: args)
@@ -201,6 +257,13 @@ struct FlyoutFixture: Decodable {
         default: throw GitHubError.message("Unsupported host request.")
         }
         return NSNull()
+    }
+
+    private func systemSettings() -> [String: Any] {
+        guard let store else { return [:] }
+        return ["launchAtLogin": store.launchAtLogin, "detectPushes": store.detectPushes, "notifications": store.notifications,
+                "streakReminder": store.reminder, "automaticUpdates": store.updates.automatic,
+                "checkUpdates": store.updates.canCheck, "version": store.updates.version, "sampleCelebration": true]
     }
 }
 
@@ -233,6 +296,7 @@ extension AppDelegate {
                     defaults.set(53, forKey: "historyWeeks")
                     defaults.set("violet", forKey: "palette")
                     defaults.set(true, forKey: "detectPushes")
+                    defaults.set(["mira-fixture"], forKey: "favourites")
                     try version.write(to: stamp, atomically: true, encoding: .utf8)
                     if mode == "migration-seed" {
                         try "Version \(version) seeded disposable Swift Codable cache and preferences.\n".write(toFile: output + "/\(mode)-check.txt", atomically: true, encoding: .utf8)
@@ -259,6 +323,8 @@ extension AppDelegate {
                 let state = try await review.evaluate("[document.querySelector('#status').textContent, document.querySelector('#account').textContent, document.querySelector('.heat')?.getAttribute('aria-label')].join('|')") as? String
                 let weeks = mode == "migration-relaunch" ? 26 : 53
                 try require(state == "Cached activity · refresh failed|@\(fixture.dashboard.profile.person.login)|\(weeks)-week contribution graph", "Legacy cache did not load offline: \(state ?? "nil")")
+                let link = try await review.evaluate("document.querySelector('[aria-label=\"Open mira-fixture on GitHub\"]')?.href") as? String
+                try require(link == "https://github.com/mira-fixture", "Offline person profile link was not available")
                 if mode != "migration-relaunch" {
                     _ = try await review.evaluate("document.querySelector('[aria-label=\"Configure Contribution history\"]').click();const field=document.activeElement;field.value='26';field.dispatchEvent(new Event('change'));void 0")
                     await settle()
@@ -293,11 +359,11 @@ extension AppDelegate {
             _ = applicationShouldHandleReopen(NSApp, hasVisibleWindows: false)
             if mode == "shared" {
                 for _ in 0..<80 {
-                    if (try? await review.evaluate("document.querySelector('.number')?.textContent || ''")) as? String == "7" { break }
+                    if (try? await review.evaluate("(dial => dial?.getBoundingClientRect().height ? dial.textContent : '')(document.querySelector('.number'))")) as? String == "7" { break }
                     try? await Task.sleep(for: .milliseconds(25))
                 }
             }
-            if let content = reviewPopover.contentViewController?.view {
+            if mode == "reference", let content = reviewPopover.contentViewController?.view {
                 content.layoutSubtreeIfNeeded()
                 content.window?.displayIfNeeded()
             }
@@ -384,8 +450,25 @@ extension AppDelegate {
                     getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()
                     """) as? String
                 try require(theme == "#236B8E", "Custom accent did not render: \(theme ?? "nil")")
+                _ = try await review.evaluate("document.querySelector('main').scrollTop=0;void 0")
                 await settle()
                 try await review.capture(controller, to: output + "/shared-appearance.png")
+                let settings = try await review.evaluate("""
+                    const get = label => document.querySelector(`[aria-label="${label}"]`);
+                    get('Orbit menu bar display').click();
+                    get('Show streak').click();
+                    get('Detect pushes automatically').click();
+                    const asked = !!get('Enable Git integration') && !get('Detect pushes automatically').checked;
+                    get('Cancel Git integration').click();
+                    const canceled = !get('Enable Git integration') && !get('Detect pushes automatically').checked;
+                    get('Detect pushes automatically').click(); get('Enable Git integration').click();
+                    [get('Orbit menu bar display').getAttribute('aria-pressed'), get('Show streak').checked,
+                      asked, canceled, get('Detect pushes automatically').checked, get('Check now').disabled].join('|')
+                    """) as? String
+                try require(settings == "true|true|true|true|true|true", "Settings fixture and Git consent: \(settings ?? "nil")")
+                _ = try await review.evaluate("document.querySelector('[aria-label=\"Detect pushes automatically\"]').closest('section').scrollIntoView();void 0")
+                await settle()
+                try await review.capture(controller, to: output + "/shared-system-settings.png")
                 _ = try await review.evaluate("document.querySelector('[aria-label=\"Violet theme\"]').click();document.querySelector('[aria-label=\"Back to dashboard\"]').click();document.querySelector('[aria-label=\"Configure Contribution history\"]').focus();void 0")
                 _ = try await review.evaluate("document.activeElement.click();document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}));void 0")
                 let escaped = try await review.evaluate("document.activeElement.getAttribute('aria-label')") as? String

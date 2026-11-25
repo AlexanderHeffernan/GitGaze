@@ -43,6 +43,7 @@
     orchid:['963BBF','DB8FFF'], lagoon:['0A737A','4DD9DB'] };
   const systemDark = matchMedia('(prefers-color-scheme: dark)');
   let data, prefs, today, stats, page = 'GitGaze', configuring, status = '', error, live;
+  let systemSettings = {}, systemBusy = false, settingsError, confirmPushes = false;
   let peopleSearch = '', settingsLimit = 20, peopleLimit = 12;
   const expandedPeople = new Set();
   const requests = new Map();
@@ -61,7 +62,12 @@
     post('request', { version:1, id, method, args:args ?? null });
   });
 
-  function change(next) { prefs = next; if (activity) void activity.setPreferences(next); else post('preferences', next); render(); }
+  function change(next) {
+    prefs = next;
+    const saved = activity ? activity.setPreferences(next) : post('preferences', next);
+    render();
+    return saved;
+  }
   function flip(key, open) {
     peopleSearch = ''; settingsLimit = 20;
     configuring = open ? key : undefined;
@@ -69,7 +75,7 @@
     main.querySelector(`[data-widget="${key}"] ${open ? '.face :is(input, select, button)' : 'button[aria-label^="Configure"]'}`)?.focus();
   }
   function refresh() { if (activity) void activity.refresh({ force:true }); else post('refresh'); }
-  function navigate(next) { page = next; configuring = undefined; peopleLimit = 12; expandedPeople.clear(); render(); main.scrollTop = 0; main.focus(); }
+  function navigate(next) { page = next; configuring = undefined; confirmPushes = false; peopleLimit = 12; expandedPeople.clear(); render(); main.scrollTop = 0; main.focus(); }
 
   function todayCard() {
     const chart = svg('svg', { viewBox:'0 0 112 112', 'aria-hidden':'true' });
@@ -135,6 +141,18 @@
     return core.orderPeople(data.following, prefs);
   }
 
+  function avatar(person) {
+    const badge = text(person.login[0].toUpperCase(), 'avatar');
+    if (!live || !person.avatarUrl) return badge;
+    try {
+      const url = new URL(person.avatarUrl);
+      if (url.origin !== 'https://avatars.githubusercontent.com' || url.username || url.password) return badge;
+      const image = el('img'); image.alt = ''; image.referrerPolicy = 'no-referrer'; image.loading = 'lazy'; image.src = url.href;
+      image.addEventListener('load', () => badge.replaceChildren(image), { once:true });
+    } catch { /* Keep the initial when the stored URL is invalid. */ }
+    return badge;
+  }
+
   function peopleCard(favouritesOnly) {
     const people = orderedPeople().filter(p => !favouritesOnly || prefs.favourites.includes(p.login));
     if (!people.length) return text('Choose people in this widget’s settings.', 'secondary yearly-empty');
@@ -142,7 +160,9 @@
       const { login } = person, profile = data.people && Object.hasOwn(data.people, login) ? data.people[login] : null;
       const key = `${favouritesOnly}|${login}`, expanded = expandedPeople.has(key);
       const toggle = () => { if (expanded) expandedPeople.delete(key); else expandedPeople.add(key); render(); };
-      const name = group('person-name', text(login[0].toUpperCase(), 'avatar'), text(person.name || login, 'person-title'));
+      const title = live && /^[a-z0-9][a-z0-9-]{0,38}$/i.test(login) ? el('a', 'person-title', person.name || login) : text(person.name || login, 'person-title');
+      if (title.tagName === 'A') { title.href = `https://github.com/${login}`; title.referrerPolicy = 'no-referrer'; title.setAttribute('aria-label', `Open ${login} on GitHub`); }
+      const name = group('person-name', avatar(person), title);
       const row = group('person-row', name);
       if (!profile) { row.append(text('History not loaded')); return row; }
       const totals = core.statistics(profile.days, today);
@@ -180,7 +200,7 @@
           change({ ...prefs, favourites:selected ? prefs.favourites.filter(login => login !== p.login) : [...prefs.favourites, p.login], favouriteOrder:order });
           if (!selected) void activity?.loadPeople(peopleLimit);
         }));
-        return group('person-option', text(p.login[0].toUpperCase(), 'avatar'), text(p.name || p.login, 'person-title'), controls);
+        return group('person-option', avatar(p), text(p.name || p.login, 'person-title'), controls);
       }));
       if (!matching.length) rows.append(text('No matching people', 'secondary yearly-empty'));
       if (matching.length > settingsLimit) rows.append(button('Show more', 'Show more matches', () => { settingsLimit += 20; populate(); }));
@@ -250,6 +270,60 @@
     return section;
   }
 
+  function toggle(label, value, update, disabled = false) {
+    const input = el('input'); input.type = 'checkbox'; input.checked = !!value; input.disabled = disabled;
+    input.setAttribute('aria-label', label);
+    input.addEventListener('change', () => update(input.checked));
+    const row = el('label', 'option', label); row.append(input); return row;
+  }
+
+  async function systemChange(key, value = null) {
+    if (systemBusy || !(key in systemSettings)) return;
+    settingsError = undefined;
+    if (!activity) { systemSettings[key] = value; render(); return; }
+    systemBusy = true; render();
+    try { await activity.systemSetting(key, value); }
+    catch (e) { settingsError = e.message; }
+    finally { systemBusy = false; render(); }
+  }
+
+  function systemToggle(label, key, update = value => void systemChange(key, value)) {
+    return toggle(label, systemSettings[key], update, systemBusy || !(key in systemSettings));
+  }
+
+  function settingsPanels() {
+    const section = (title, ...content) => { const node = el('section'); node.append(el('h2', '', title), ...content); return node; };
+    const choice = (label, key, choices, fallback, after) => group('settings-choices', ...choices.map(([id, title, glyph]) => {
+      const node = button(`${glyph} ${title}`, title + ' ' + label, async () => {
+        await change({ ...prefs, [key]:id });
+        after?.();
+      });
+      node.setAttribute('aria-pressed', String((prefs[key] ?? fallback) === id));
+      return node;
+    }));
+    const pushes = systemToggle('Detect pushes automatically', 'detectPushes', enabled => {
+      if (enabled) { confirmPushes = true; render(); main.querySelector('[aria-label="Cancel Git integration"]')?.focus(); }
+      else void systemChange('detectPushes', false);
+    });
+    const confirmation = confirmPushes ? [group('settings-confirm', text('Enable push detection across repositories?', 'person-title'),
+      text('Adds Git’s trace2.eventTarget setting to your user configuration. Events stay on this device, in memory.'),
+      button('Cancel', 'Cancel Git integration', () => { confirmPushes = false; render(); main.querySelector('[aria-label="Detect pushes automatically"]')?.focus(); }),
+      button('Enable Git integration', 'Enable Git integration', () => { confirmPushes = false; void systemChange('detectPushes', true); }))] : [];
+    const person = data?.profile.person;
+    return [appearanceSettings(), section('Menu bar', choice('menu bar display', 'menuStyle', [
+      ['orbit','Orbit','◌'], ['charge','Charge','◔'], ['pulse','Pulse','▂'], ['mosaic','Mosaic','▦'], ['prism','Prism','◇'], ['ribbon','Ribbon','▰']
+    ], 'charge'), toggle('Show streak', prefs.menuStreak, value => change({ ...prefs, menuStreak:value }))),
+    section('Celebrations', toggle('Visual celebrations', prefs.visualCelebrations ?? true, value => change({ ...prefs, visualCelebrations:value })),
+      choice('celebration', 'celebrationStyle', [['fireworks','Fireworks','✧'], ['nova','Supernova','☼'], ['meteors','Meteor shower','✦']],
+        'fireworks', () => { if (systemSettings.sampleCelebration) void systemChange('sampleCelebration'); }),
+      systemToggle('Milestone notifications', 'notifications')),
+    section('General', systemToggle('Launch at login', 'launchAtLogin'), pushes, ...confirmation),
+    section('Updates', text(systemSettings.version ?? 'Updates are not available in this build.'),
+      systemToggle('Check automatically', 'automaticUpdates'),
+      button('Check now', 'Check now', () => void systemChange('checkUpdates'), systemBusy || !systemSettings.checkUpdates)),
+    ...(person ? [group('option', group('', text(person.name || person.login, 'person-title'), text(`@${person.login}`)), text('GitHub CLI'))] : [])];
+  }
+
   function momentumCard() {
     const monday = core.monday(today);
     const values = Array.from({ length:7 }, (_, i) => stats.count(core.offset(monday, i)));
@@ -266,7 +340,9 @@
 
   const widgets = {
     today: { title:'Today', face:todayCard },
-    streak: { title:'Streak', face:streakCard, settings:() => select('Reminder hour', Array.from({ length:24 }, (_, i) => [i, `${String(i).padStart(2, '0')}:00`]), prefs.reminderHour, h => change({ ...prefs, reminderHour:Number(h) })) },
+    streak: { title:'Streak', face:streakCard, settings:() => group('', systemToggle('Streak reminder', 'streakReminder'),
+      ...(systemSettings.streakReminder ? [select('When today is empty after', Array.from({ length:24 }, (_, i) => [i, `${String(i).padStart(2, '0')}:00`]), prefs.reminderHour,
+        h => change({ ...prefs, reminderHour:Number(h) }), false)] : [])) },
     heatmap: { title:'Contribution history', heading:'Contributions', face:heatmap, settings:() => select('Visible history', [[26,'6 months'],[53,'Year']], prefs.historyWeeks, weeks => change({ ...prefs, historyWeeks:Number(weeks) })) },
     favourites: { title:'Favourite people', heading:'Favourites', face:() => peopleCard(true), settings:peopleSettings },
     momentum: { title:'Weekly momentum', heading:'This week', face:momentumCard },
@@ -328,8 +404,9 @@
     main.classList.toggle('gallery', page === 'Add widgets');
     main.replaceChildren();
     if (error) main.append(text(error, 'metric record'));
+    if (settingsError && (page === 'Settings' || configuring)) main.append(text(settingsError, 'metric record'));
     if (page === 'Settings') {
-      main.append(appearanceSettings());
+      main.append(...settingsPanels());
     } else if (!data) {
       main.append(el('h2', '', 'Your work, in view.'), el('p', '', 'Connect with your GitHub CLI session.'), button('Connect GitHub CLI', 'Connect GitHub CLI', refresh));
     } else {
@@ -355,9 +432,11 @@
     status = snapshot.status || (data ? 'Cached activity' : 'Not connected');
     error = snapshot.error;
     live = snapshot.live === true;
+    systemSettings = snapshot.systemSettings ?? {};
     render();
   };
   window.gitGazeOpen = () => navigate('GitGaze');
+  window.gitGazeRefresh = force => { if (activity) void activity.refresh({ force:force === true }); };
   window.gitGazeStart = () => {
     if (window !== window.top || activity) return;
     activity = globalThis.gitGazeActivity({ request, core, registry, onChange:window.gitGazeReceive });
@@ -371,7 +450,8 @@
   });
   document.addEventListener('keydown', event => {
     if (event.key !== 'Escape' || event.defaultPrevented) return;
-    if (configuring) flip(configuring, false);
+    if (confirmPushes) { confirmPushes = false; render(); }
+    else if (configuring) flip(configuring, false);
     else if (page !== 'GitGaze') navigate('GitGaze');
     else post('dismiss');
   });

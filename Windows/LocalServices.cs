@@ -55,6 +55,9 @@ internal sealed class LocalServices : IDisposable
         if (changes == null || !changes.All(pair => pair.Key switch
         {
             "appearance" => pair.Value?.GetValue<string>() is "system" or "light" or "dark",
+            "menuStyle" => pair.Value?.GetValue<string>() is "orbit" or "charge" or "pulse" or "mosaic" or "prism" or "ribbon",
+            "celebrationStyle" => pair.Value?.GetValue<string>() is "fireworks" or "nova" or "meteors",
+            "visualCelebrations" or "menuStreak" => pair.Value is JsonValue flag && flag.TryGetValue<bool>(out _),
             "palette" => pair.Value?.GetValue<string>() is "violet" or "coral" or "ice" or "graphite" or "mint" or "rose" or "amber" or "cobalt" or "orchid" or "lagoon" or "custom",
             "customLight" or "customDark" => Regex.IsMatch(pair.Value?.GetValue<string>() ?? "", @"\A[0-9A-Fa-f]{6}\z"),
             "historyWeeks" => pair.Value?.GetValue<int>() is 26 or 53,

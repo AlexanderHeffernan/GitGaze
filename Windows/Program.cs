@@ -1,5 +1,7 @@
 using System.Drawing;
+using System.Diagnostics;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using System.Windows;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
@@ -68,7 +70,17 @@ internal static class Program
                     web.Settings.AreDefaultContextMenusEnabled = false;
                     web.Settings.AreHostObjectsAllowed = false;
                     web.SetVirtualHostNameToFolderMapping(Origin, assets, CoreWebView2HostResourceAccessKind.Deny);
-                    web.NavigationStarting += (_, e) => { if (e.Uri != Document) e.Cancel = true; };
+                    web.NavigationStarting += (_, e) =>
+                    {
+                        if (e.Uri == Document) return;
+                        e.Cancel = true;
+                        if (fixture == null && web.Source == Document && e.IsUserInitiated &&
+                            Regex.IsMatch(e.Uri, @"\Ahttps://github\.com/[A-Za-z0-9][A-Za-z0-9-]{0,38}\z"))
+                        {
+                            try { Process.Start(new ProcessStartInfo(e.Uri) { UseShellExecute = true }); }
+                            catch (System.ComponentModel.Win32Exception) { MessageBox.Show("Couldn't open the GitHub profile.", "GitGaze"); }
+                        }
+                    };
                     web.NewWindowRequested += (_, e) => e.Handled = true;
                     web.WebMessageReceived += async (_, e) =>
                     {

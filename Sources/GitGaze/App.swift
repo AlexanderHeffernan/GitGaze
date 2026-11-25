@@ -70,7 +70,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
         if CommandLine.arguments.contains("--shared-client") {
             do {
-                flyoutReview = try FlyoutReview(mode: "shared", local: SharedMacLocal(cache: store.cacheURL, defaults: .standard))
+                store.updates.start()
+                flyoutReview = try FlyoutReview(mode: "shared", local: SharedMacLocal(cache: store.cacheURL, defaults: .standard, store: store))
+                store.sharedPushRefresh = { [weak self] in self?.flyoutReview?.refresh() }
+                NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(wake), name: NSWorkspace.didWakeNotification, object: nil)
                 showPopover()
             } catch {
                 NSAlert(error: error).runModal()
@@ -94,7 +97,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(wake), name: NSWorkspace.didWakeNotification, object: nil)
     }
 
-    @objc private func wake() { store.refresh() }
+    @objc private func wake() {
+        #if DEBUG
+        if flyoutReview?.refresh(force: false) == true { return }
+        #endif
+        store.refresh()
+    }
     @objc private func screensChanged() { scheduleStatusUpdate() }
     func popoverDidClose(_ notification: Notification) { popover.contentViewController = nil }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { showPopover(); return true }
@@ -114,7 +122,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         else { showPopover() }
     }
     @objc private func showFromMenu() { showPopover() }
-    @objc private func refreshFromMenu() { store.refresh(force: true) }
+    @objc private func refreshFromMenu() {
+        #if DEBUG
+        if flyoutReview?.refresh() == true { return }
+        #endif
+        store.refresh(force: true)
+    }
     @objc private func checkForUpdates() { store.updates.check() }
     @objc private func quit() { NSApp.terminate(nil) }
     private func showPopover() {
