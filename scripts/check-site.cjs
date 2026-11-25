@@ -41,6 +41,7 @@ async function main() {
 
     for (const width of [320, 390, 768, 980, 981, 1280, 1440]) {
       await page.setViewportSize({ width, height: 900 });
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve))); // Let the demo refit.
       const fits = await page.evaluate(() => document.documentElement.scrollWidth === innerWidth);
       assert(fits, `${width}px overflows horizontally`);
     }

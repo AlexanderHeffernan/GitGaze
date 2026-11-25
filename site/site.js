@@ -131,6 +131,8 @@ function place() {
  */
 function fit() {
   const demo = stage.parentElement, height = 692;
+  // Measure the column without the last fit's fixed width, which would stretch it.
+  Object.assign(stage.style, { transform: '', width: '', maxWidth: '', marginInline: '', marginBottom: '' });
   let zoom = Math.min(1, demo.clientWidth / 420);
   if (matchMedia('(min-width: 981px)').matches) {
     const hero = $('.hero'), style = getComputedStyle(hero);

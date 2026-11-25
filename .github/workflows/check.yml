@@ -143,6 +143,12 @@ jobs:
             echo "published=true" >> "$GITHUB_OUTPUT"
             echo "This commit is already released as v$VERSION."
           fi
+          # Only app changes ship: tests, scripts and workflow edits don't prompt users to update.
+          LAST="$(git describe --tags --abbrev=0 --match 'v[0-9]*' HEAD 2>/dev/null || true)"
+          if [ "$DRAFT" != false ] && [ -n "$LAST" ] && git diff --quiet "$LAST" HEAD -- ui src-tauri package.json package-lock.json; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "Nothing in the app changed since $LAST; no release."
+          fi
       - uses: actions/download-artifact@v4
         if: steps.version.outputs.published != 'true'
         with:
