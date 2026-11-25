@@ -145,7 +145,8 @@ jobs:
             if (Test-Path $old) { throw 'GitGaze was not uninstalled' }
             if (Test-Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\GitGaze') { throw 'GitGaze is still listed in installed apps' }
             if ((Get-ItemProperty $run).GitGaze) { throw 'GitGaze still launches at login' }
-            if (-not (Get-ItemProperty $run).Stoke) { throw 'Stoke does not launch at login' }
+            # The autostart plugin writes the machine-wide Run key when the process is elevated, as on CI runners.
+            if (-not ((Get-ItemProperty $run).Stoke -or (Get-ItemProperty ($run -replace '^HKCU', 'HKLM')).Stoke)) { throw 'Stoke does not launch at login' }
             if (-not (Test-Path "$env:APPDATA\GitGaze\ci-keep.txt")) { throw 'Settings were deleted' }
             Get-Process GitGaze, Stoke -ErrorAction SilentlyContinue | Stop-Process -Force
           } else { Write-Host 'The published release is already Stoke; nothing to migrate.' }
