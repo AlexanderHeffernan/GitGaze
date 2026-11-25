@@ -41,7 +41,9 @@
   let data, prefs, today, stats, page = 'GitGaze', configuring, status = '', error, live;
   const requests = new Map();
   let serial = 0, activity;
-  let leaderboardContext, leaderboardLimit = 5, leaderboardRequested = false;
+  let leaderboardContext, leaderboardLimit = 5;
+  const { periods } = globalThis.gitGazeLeaderboard;
+  const selectedPeriod = () => Object.hasOwn(periods, prefs?.leaderboardPeriod) ? prefs.leaderboardPeriod : 'week';
   const leaderboard = globalThis.gitGazeLeaderboard.leaderboard({ publish:() => { if (prefs) render(); } });
   const leaderboardEnabled = () => prefs && !prefs.hidden.includes('leaderboard');
   function updateLeaderboard(context, force = false) {
@@ -50,7 +52,7 @@
     if (leaderboard.snapshot().account !== account) {
       leaderboardLimit = 5;
       const selection = prefs.leaderboardOrganization;
-      leaderboard.scope(account, selection?.account === account ? selection.id : null);
+      leaderboard.scope(account, selection?.account === account ? selection.id : null, selectedPeriod());
     }
     void leaderboard.refresh(context, { force });
   }
@@ -72,7 +74,7 @@
     const wasEnabled = leaderboardEnabled();
     prefs = next;
     if (activity) void activity.setPreferences(next); else post('preferences', next);
-    if (wasEnabled && !leaderboardEnabled()) { leaderboardRequested = false; leaderboard.cancel(); }
+    if (wasEnabled && !leaderboardEnabled()) leaderboard.cancel();
     if (!wasEnabled && leaderboardEnabled()) updateLeaderboard(leaderboardContext);
     render();
   }
@@ -81,7 +83,7 @@
     render();
     main.querySelector(`[data-widget="${key}"] ${open ? 'select' : 'button[aria-label^="Configure"]'}`)?.focus();
   }
-  function refresh() { if (activity) void activity.refresh({ force:true }); else post('refresh'); }
+  function refresh() { if (activity) void activity.refresh({ force:true, extensionForce:leaderboardEnabled() }); else post('refresh'); }
   function navigate(next) { page = next; configuring = undefined; render(); main.scrollTop = 0; main.focus(); }
 
   function todayCard() {
@@ -170,34 +172,18 @@
   function leaderboardStatus(state) {
     const { snapshot, loading, error, organizations } = state;
     const panel = group('leaderboard-status');
-    panel.tabIndex = -1;
-    const refreshRank = () => {
-      leaderboardRequested = true;
-      render();
-      void activity.refresh({ force:true, extensionForce:true });
-    };
-    const busy = loading || leaderboardRequested;
-    const accessHelp = 'Check gh auth status, confirm organization access (read:org for classic tokens), and authorize GitHub CLI for your organization’s SSO if required. Then refresh.';
-    if (snapshot) {
-      const time = el('time', 'secondary', `Leaderboard updated ${new Date(snapshot.updatedAt).toLocaleString(undefined, { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })}`);
-      time.dateTime = new Date(snapshot.updatedAt).toISOString();
-      panel.append(group('split', time, ...(!busy && !error && activity ? [button('Refresh', 'Refresh leaderboard', refreshRank)] : [])));
+    const accessHelp = 'Check gh auth status and organization access (read:org for classic tokens), authorize GitHub CLI for SSO if required, then refresh GitGaze.';
+    if (loading) {
+      if (!snapshot) panel.append(text(organizations ? 'Ranking visible members…' : 'Finding organizations…'));
     }
-    if (busy) panel.append(text(loading ? snapshot ? 'Refreshing leaderboard…' : organizations ? 'Ranking visible members…' : 'Finding organizations…' : 'Waiting to refresh leaderboard…'));
     else if (error) {
       const messages = { access:'Your GitHub CLI session can’t access this organization or roster.',
-        roster_limit:`This organization exceeds the limit of ${globalThis.gitGazeLeaderboard.memberLimit} visible members. Choose a smaller organization in widget settings.`,
+        roster_limit:`Over ${globalThis.gitGazeLeaderboard.memberLimit} visible members. Choose a smaller organization in widget settings.`,
         rate_limit:'GitHub is limiting requests. Try again later.', network:'GitHub couldn’t be reached.', server:'GitHub is temporarily unavailable.',
         incomplete:'GitHub didn’t return a complete visible roster. No ranking is shown.', unknown:'GitGaze couldn’t verify the leaderboard response. No ranking is shown.' };
       panel.append(text(messages[error], 'secondary record'));
-      if (error === 'access') {
-        panel.append(text(accessHelp));
-        if (activity) panel.append(button('Recheck access', 'Recheck leaderboard access', refreshRank));
-      }
-      if (['network', 'server', 'rate_limit'].includes(error)) {
-        if (snapshot) panel.append(text('Showing the last complete ranking.'));
-        if (activity) panel.append(button('Try again', 'Retry leaderboard', refreshRank));
-      }
+      if (error === 'access') panel.append(text(accessHelp));
+      if (snapshot) panel.append(text('Showing the last complete ranking.'));
     } else if (organizations?.length === 0) panel.append(text('No organizations are visible to this GitHub CLI session.'), text(accessHelp));
     else if (!snapshot) panel.append(text('Connect an eligible GitHub CLI session to rank organization members.'));
     return panel;
@@ -206,29 +192,31 @@
   function leaderboardCard(gallery) {
     if (gallery) return text('Compare visible contribution activity within an organization.');
     const state = leaderboard.snapshot();
-    const organization = state.organizations?.find(org => org.id === state.selected);
-    const body = group('leaderboard', ...(organization ? [text(organization.login, 'leaderboard-org')] : []), leaderboardStatus(state));
+    const body = group('leaderboard', leaderboardStatus(state));
     const rows = state.snapshot?.rows;
     if (!rows) return body;
     if (!rows.length) { body.append(text('GitHub returned no visible members to rank.')); return body; }
     const viewer = rows.find(row => row.login.toLowerCase() === state.account);
-    body.append(viewer ? group('leaderboard-place split', group('', text('YOUR PLACE'),
-      text(`#${num(viewer.rank)} of ${num(rows.length)} visible members`, 'leaderboard-rank')), text(`${num(viewer.count)} contributions`)) :
-      text('Your account isn’t in the visible roster, so no personal rank is available.'));
-    body.append(text('Last 30 days · commits, issues, PRs and reviews. Only members and activity visible to your GitHub CLI session count.'));
-    if (rows[0].count === 0) body.append(text('No visible activity in this period. All ranked members are tied.'));
-    const list = el('ol', 'leaderboard-rows'); list.setAttribute('aria-label', 'Visible member rankings');
-    for (const row of rows.slice(0, leaderboardLimit)) {
-      const item = el('li');
+    const list = el('ol', 'leaderboard-rows'); list.setAttribute('aria-label', `Rankings among ${num(rows.length)} visible members`);
+    const shown = rows.slice(0, leaderboardLimit);
+    if (viewer && !shown.includes(viewer)) shown.push(viewer);
+    for (const row of shown) {
+      if (row === viewer && shown.indexOf(row) === leaderboardLimit && rows[leaderboardLimit] !== row) {
+        const gap = el('li', 'leaderboard-gap', '⋯'); gap.setAttribute('aria-hidden', 'true'); list.append(gap);
+      }
+      const item = el('li', row === viewer ? 'leaderboard-self' : '');
+      const rank = el('span', 'leaderboard-position', `#${num(row.rank)}`);
+      if (row.count && row.rank <= 3) rank.dataset.podium = row.rank;
       const initial = el('span', 'leaderboard-avatar', (row.name || row.login).slice(0, 1).toUpperCase());
       initial.setAttribute('aria-hidden', 'true');
       const name = text(row.name || row.login, 'leaderboard-name'); name.title = `@${row.login}`;
-      item.append(text(`#${num(row.rank)}`), initial, name);
+      item.append(rank, initial, name);
       if (row === viewer) item.append(text('You', 'leaderboard-you'));
       item.append(text(num(row.count), 'leaderboard-count')); list.append(item);
     }
     body.append(list);
-    if (rows.length > leaderboardLimit) body.append(button(`Show more (${num(rows.length - leaderboardLimit)} remaining)`, 'Show more ranked members', () => {
+    const remaining = rows.length - shown.length;
+    if (remaining) body.append(button(`Show ${num(remaining)} more`, 'Show more ranked members', () => {
       leaderboardLimit += 10; render();
     }));
     return body;
@@ -237,6 +225,13 @@
   function leaderboardSettings() {
     const state = leaderboard.snapshot();
     const body = group('leaderboard', leaderboardStatus(state));
+    body.prepend(select('Period', Object.entries(periods), selectedPeriod(), period => {
+      change({ ...prefs, leaderboardPeriod:period });
+      if (!state.account) return;
+      leaderboardLimit = 5;
+      leaderboard.scope(state.account, state.selected, period);
+      if (leaderboardContext) updateLeaderboard({ ...leaderboardContext, at:Date.now() }, true);
+    }));
     if (state.organizations?.length) {
       const options = state.organizations.map(org => [org.id, org.login]);
       if (!options.some(([id]) => id === state.selected)) options.unshift(['', 'Choose an organization']);
@@ -244,7 +239,7 @@
         if (!id || !leaderboardContext || leaderboardContext.signal.aborted) return;
         leaderboardLimit = 5;
         change({ ...prefs, leaderboardOrganization:{ account:state.account, id } });
-        leaderboard.scope(state.account, id);
+        leaderboard.scope(state.account, id, selectedPeriod());
         updateLeaderboard({ ...leaderboardContext, at:Date.now() }, true);
       }));
     }
@@ -279,7 +274,9 @@
     const { title, heading = title, face, settings } = widgets[key];
     const template = $('widget').content.cloneNode(true);
     const section = template.querySelector('section'), tools = section.querySelector('.tools');
-    section.querySelector('h2').textContent = heading;
+    const rankState = key === 'leaderboard' && !gallery ? leaderboard.snapshot() : null;
+    const org = rankState?.organizations?.find(org => org.id === rankState.selected);
+    section.querySelector('h2').textContent = org ? `${org.login} leaderboard` : heading;
     section.dataset.widget = key;
     if (key === 'today' && !gallery) {
       const date = new Date(`${today}T12:00:00`);
@@ -308,7 +305,6 @@
     const oldOffset = main.scrollTop;
     const oldFocus = document.activeElement;
     const oldControl = oldFocus?.getAttribute('aria-label');
-    const rankFocus = oldFocus?.closest('.leaderboard-status');
     const actions = $('actions');
     $('title').textContent = page;
     document.documentElement.dataset.mode = prefs.appearance;
@@ -335,13 +331,12 @@
     $('status').textContent = status;
     const statusPanel = main.querySelector('.leaderboard-status');
     const matchingControl = oldControl && [...document.querySelectorAll('button')].find(b => !b.disabled && b.getAttribute('aria-label') === oldControl);
-    const nextFocus = matchingControl || (rankFocus && (statusPanel?.querySelector('button') || statusPanel)) ||
+    const nextFocus = matchingControl ||
       (oldControl === 'Add Organization leaderboard' && $('actions').querySelector('button'));
     if (nextFocus) nextFocus.focus({ preventScroll:true });
     const announcement = $('leaderboard-announcement');
     const state = leaderboard.snapshot();
-    const message = !leaderboardEnabled() ? '' : leaderboardRequested ? 'Waiting to refresh leaderboard.' :
-      state.loading ? 'Refreshing organization leaderboard.' : state.error ? `Leaderboard: ${statusPanel?.textContent || 'refresh failed.'}` :
+    const message = !leaderboardEnabled() ? '' : state.loading ? 'Refreshing organization leaderboard.' : state.error ? `Leaderboard: ${statusPanel?.textContent || 'refresh failed.'}` :
       state.snapshot ? 'Organization leaderboard updated.' : state.organizations?.length === 0 ? 'No visible organizations.' : '';
     if (announcement.textContent !== message) announcement.textContent = message;
     main.scrollTop = oldOffset;
@@ -364,12 +359,10 @@
       onVerifiedRefresh: context => {
         leaderboardContext = context;
         if (leaderboard.snapshot().account && leaderboard.snapshot().account !== context.login.toLowerCase()) leaderboard.scope(context.login,
-          prefs.leaderboardOrganization?.account === context.login.toLowerCase() ? prefs.leaderboardOrganization.id : null);
-        if (context.extensionForce) leaderboardRequested = false;
+          prefs.leaderboardOrganization?.account === context.login.toLowerCase() ? prefs.leaderboardOrganization.id : null, selectedPeriod());
         updateLeaderboard(context, context.extensionForce);
       }, onViewerFailure: failure => {
         leaderboardContext = undefined;
-        leaderboardRequested = false;
         leaderboard.fail(failure);
       } });
     void activity.start();

@@ -41,14 +41,31 @@ test('discovers only active memberships and ranks all pages with scoped counts a
   assert.deepEqual(available.map(org => org.id), [north.id, south.id]);
   const rows = await standings(context((operation, variables) => {
     assert.equal(operation, 'leaderboardMembers');
-    assert.deepEqual(variables, { login:north.login, org:north.id, from:'2025-02-01T07:40:00.000Z',
-      to:'2025-03-03T07:40:00.000Z', after:variables.after });
+    assert.deepEqual(variables, { login:north.login, org:north.id, from:new Date(2025, 2, 3).toISOString(),
+      to:new Date(2025, 2, 3, 12).toISOString(), after:variables.after });
     if (variables.after === null) return roster(north, [member('Zeke', 6), member('quiet', 0)], 4, 'member-page-2');
     assert.equal(variables.after, 'member-page-2');
     return roster(north, [member('alice', 0, 2, 3, 1), member('viewer', 1, 2, 3, 4)], 4);
-  }), north);
+  }, { at:+new Date(2025, 2, 3, 12) }), north);
   assert.deepEqual(rows.map(({ login, count, rank }) => [login, count, rank]),
     [['viewer', 10, 1], ['alice', 6, 2], ['Zeke', 6, 2], ['quiet', 0, 4]]);
+});
+
+test('period switches clear the old ranking and query the selected local calendar boundary', async () => {
+  const state = leaderboard({ publish() {} });
+  const end = new Date(2025, 2, 9, 14); // Sunday; daylight saving starts here in some zones.
+  for (const [period, month, day] of [['today', 2, 9], ['week', 2, 3], ['month', 2, 1], ['year', 0, 1]]) {
+    state.scope('viewer', north.id, period);
+    assert.equal(state.snapshot().snapshot, null);
+    await state.refresh(context((op, vars) => {
+      if (op === 'leaderboardMembers') {
+        assert.equal(vars.from, new Date(2025, month, day).toISOString());
+        assert.equal(vars.to, end.toISOString());
+      }
+      return good(op, vars);
+    }, { at:+end }));
+    assert.equal(state.snapshot().snapshot.rows.length, 2);
+  }
 });
 
 test('withholds incomplete, oversized, changed roster and wrong-account results', async () => {

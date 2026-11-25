@@ -123,7 +123,7 @@ struct FlyoutFixture: Decodable {
     }
 
     private static let keys = ["modules", "hidden", "favourites", "favouriteOrder", "palette", "customLight", "customDark", "menuStyle", "menuStreak",
-        "appearance", "notifications", "visualCelebrations", "celebrationStyle", "streakReminder", "reminderHour", "lastReminderDay", "detectPushes", "historyWeeks", "comparisonYear", "comparisonMode", "leaderboardOrganization"]
+        "appearance", "notifications", "visualCelebrations", "celebrationStyle", "streakReminder", "reminderHour", "lastReminderDay", "detectPushes", "historyWeeks", "comparisonYear", "comparisonMode", "leaderboardOrganization", "leaderboardPeriod"]
     private static func login(_ value: Any?) -> Bool {
         (value as? String)?.wholeMatch(of: /[A-Za-z0-9-]{1,39}/) != nil
     }
@@ -138,10 +138,11 @@ struct FlyoutFixture: Decodable {
         guard login(values["login"]), nodeID(values["org"]),
               let from = values["from"] as? String, let to = values["to"] as? String,
               let start = format.date(from: from), let end = format.date(from: to) else { return false }
-        return abs(end.timeIntervalSince(start) - 30 * 86_400) < 0.001
+        return (0.0...(366 * 86_400.0)).contains(end.timeIntervalSince(start))
     }
     private static func valid(_ key: String, _ value: Any) -> Bool {
         switch key {
+        case "leaderboardPeriod": return ["today", "week", "month", "year"].contains(value as? String ?? "")
         case "leaderboardOrganization":
             guard let pair = value as? [String: Any], pair.count == 2 else { return false }
             return login(pair["account"]) && nodeID(pair["id"])
@@ -238,7 +239,7 @@ extension AppDelegate {
                 if let failure, failure != "roster_limit" { throw GitHubError.classified("Fixture failure", code: failure) }
                 let north = vars["org"] as? String == "north"
                 let handles = north ? ["Amira", "Ben", "Cora", "Dev", "Eli", "Flo", login, "Haru"] : ["Amira", login]
-                let counts = north ? [72, 56, 56, 38, 29, 24, 19, 8] : [0, 0]
+                let counts = north ? [72, 56, 49, 38, 29, 24, 19, 8] : [0, 0]
                 let rows: [[String: Any]] = zip(handles, counts).map { handle, count in
                     ["login": handle, "name": handle == login ? "Jamie Reed" : handle, "avatarUrl": "", "contributionsCollection": [
                         "totalCommitContributions": count, "totalIssueContributions": 0, "totalPullRequestContributions": 0, "totalPullRequestReviewContributions": 0]]
@@ -296,34 +297,41 @@ extension AppDelegate {
         try await pressSpace(on: "Add Organization leaderboard")
         try await wait("document.activeElement.matches('[aria-label=\"Back to dashboard\"]')")
         try await click("Back to dashboard")
-        try await wait("document.querySelector('.leaderboard-rank')?.textContent === '#7 of 8 visible members'")
+        try await wait("document.querySelector('[data-widget=leaderboard] h2').textContent === 'northstar-labs leaderboard' && document.querySelector('.leaderboard-self .leaderboard-position')?.textContent === '#7' && Array.from(document.querySelectorAll('[data-podium]'), el => el.dataset.podium).join() === '1,2,3' && !document.querySelector('.leaderboard-status button, .leaderboard-status time')")
         try await capture("ranked")
         try await click("Show more ranked members")
         try await wait("document.querySelectorAll('.leaderboard-rows li').length === 8 && !!document.querySelector('.leaderboard-you')")
         failure = "network"
-        try await pressSpace(on: "Refresh leaderboard")
-        try await wait("!!document.querySelector('.leaderboard-rank') && document.activeElement.matches('.leaderboard-status') && document.querySelector('#leaderboard-announcement').textContent.includes('Refreshing organization leaderboard')")
-        try await wait("!!document.querySelector('.leaderboard-rank') && document.activeElement.matches('[aria-label=\"Retry leaderboard\"]') && document.querySelector('#leaderboard-announcement').textContent.includes('last complete ranking')")
+        try await pressSpace(on: "Refresh")
+        try await wait("!!document.querySelector('.leaderboard-self') && document.activeElement.matches('[aria-label=\"Refresh\"]') && document.querySelector('#leaderboard-announcement').textContent.includes('Refreshing organization leaderboard')")
+        try await wait("!!document.querySelector('.leaderboard-self') && document.activeElement.matches('[aria-label=\"Refresh\"]') && document.querySelector('#leaderboard-announcement').textContent.includes('last complete ranking')")
         try await capture("stale")
         failure = "access"
-        try await pressSpace(on: "Retry leaderboard")
-        try await wait("!document.querySelector('.leaderboard-rank') && document.activeElement.matches('[aria-label=\"Recheck leaderboard access\"]') && document.querySelector('#leaderboard-announcement').textContent.includes('SSO')")
+        try await pressSpace(on: "Refresh")
+        try await wait("!document.querySelector('.leaderboard-rows') && document.activeElement.matches('[aria-label=\"Refresh\"]') && document.querySelector('#leaderboard-announcement').textContent.includes('SSO')")
         try await click("Configure Organization leaderboard")
-        try await wait("!!document.querySelector('[data-widget=leaderboard] select') && !!document.querySelector('[aria-label=\"Recheck leaderboard access\"]') && !document.querySelector('[aria-label=\"Retry leaderboard\"]')")
+        try await wait("!!document.querySelector('[data-widget=leaderboard] select') && document.querySelector('.leaderboard-status').textContent.includes('SSO')")
         try await capture("access-settings")
         failure = "roster_limit"
-        try await pressSpace(on: "Recheck leaderboard access")
-        try await wait("document.activeElement.matches('.leaderboard-status') && document.querySelector('#leaderboard-announcement').textContent.includes('500 visible members') && !!document.querySelector('[data-widget=leaderboard] select') && !document.querySelector('.leaderboard-status button')")
+        try await pressSpace(on: "Refresh")
+        try await wait("document.activeElement.matches('[aria-label=\"Refresh\"]') && document.querySelector('#leaderboard-announcement').textContent.includes('500 visible members') && !!document.querySelector('[data-widget=leaderboard] select') && !document.querySelector('.leaderboard-status button')")
         try await capture("roster-limit")
         failure = nil
         _ = try await review.evaluate("const selector=document.querySelector('[data-widget=leaderboard] select'); selector.value='south'; selector.dispatchEvent(new Event('change')); void 0")
-        try await wait("document.querySelector('.leaderboard-rank')?.textContent === '#1 of 2 visible members' && document.querySelectorAll('.leaderboard-rows li').length === 2 && document.querySelector('.leaderboard-org')?.textContent === 'tideline-studio'")
+        try await wait("document.querySelector('.leaderboard-self .leaderboard-position')?.textContent === '#1' && document.querySelectorAll('.leaderboard-rows li').length === 2 && document.querySelector('[data-widget=leaderboard] h2').textContent === 'tideline-studio leaderboard' && !document.querySelector('[data-podium]')")
         try await capture("switched")
+        try await click("Configure Organization leaderboard")
+        try await wait("Array.from(document.querySelectorAll('[data-widget=leaderboard] select')[1].options, option => option.text).join() === 'Today,Week,Month,Year'")
+        _ = try await review.evaluate("const period=document.querySelectorAll('[data-widget=leaderboard] select')[1]; period.value='year'; period.dispatchEvent(new Event('change')); void 0")
+        try await wait("!!document.querySelector('.leaderboard-self')")
+        try await click("Configure Organization leaderboard")
+        try await capture("period")
         guard defaults.dictionary(forKey: "leaderboardOrganization")?["id"] as? String == "south",
+              defaults.string(forKey: "leaderboardPeriod") == "year",
               defaults.integer(forKey: "historyWeeks") == 26, defaults.stringArray(forKey: "hidden")?.contains("leaderboard") == false else {
             throw GitHubError.message("Leaderboard preferences were not persisted without drift")
         }
-        try "WKWebView fixture: opt-in from legacy layout, scoped rank #7/8, expansion, refresh/stale, access clearing + picker, roster limit, switch to tied zeroes, and local preferences saved without changing history setting. Native Space activation and activeElement verified across Add, Refresh, Retry and Recheck; persistent live-region messages verified. No GitHub requests.\n"
+        try "WKWebView fixture: opt-in, one organization heading, podium badges, highlighted #7 row, no widget refresh or timestamp, expansion, dashboard refresh, stale, access clearing, roster limit and org switch. Native Space and keyboard focus passed for Add and dashboard Refresh. No GitHub requests.\n"
             .write(toFile: output + "/leaderboard-check.txt", atomically: true, encoding: .utf8)
     }
 

@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   const memberLimit = 500, pageLimit = memberLimit / 25;
-  const interval = 15 * 60_000, windowMs = 30 * 86_400_000;
+  const periods = { today:'Today', week:'Week', month:'Month', year:'Year' };
   const fields = ['totalCommitContributions', 'totalIssueContributions',
     'totalPullRequestContributions', 'totalPullRequestReviewContributions'];
   const transient = new Set(['rate_limit', 'network', 'server']);
@@ -45,7 +45,12 @@
   }
 
   async function standings(context, organization) {
-    const from = new Date(context.at - windowMs).toISOString(), to = new Date(context.at).toISOString();
+    const end = new Date(context.at), start = new Date(end);
+    start.setHours(0, 0, 0, 0);
+    if (context.period === 'week') start.setDate(start.getDate() - (start.getDay() + 6) % 7);
+    if (context.period === 'month') start.setDate(1);
+    if (context.period === 'year') start.setMonth(0, 1);
+    const from = start.toISOString(), to = end.toISOString();
     const seen = new Set(), members = new Map();
     let after = null, total;
     do {
@@ -78,36 +83,34 @@
   }
 
   function leaderboard({ publish, now = Date.now }) {
-    let state = {}, active, attempted = -Infinity;
+    let state = {}, active;
     const update = changes => { state = { ...state, ...changes }; publish(state); };
-    function scope(login, selected = null) {
+    function scope(login, selected = null, period = 'week') {
       const account = loginKey(login);
-      if (account === state.account && selected === state.selected) return;
-      active?.abort(); active = undefined; attempted = -Infinity;
+      if (account === state.account && selected === state.selected && period === state.period) return;
+      active?.abort(); active = undefined;
       if (account !== state.account) state = {};
-      update({ account, selected, snapshot:null, error:null, loading:false });
+      update({ account, selected, period, snapshot:null, error:null, loading:false });
     }
     function cancel() {
       active?.abort(); active = undefined;
-      if (state.loading) { attempted = -Infinity; update({ loading:false }); }
+      if (state.loading) update({ loading:false });
     }
     function fail(error) {
       const code = errors.has(error?.code) ? error.code : 'unknown';
       cancel();
-      if (!transient.has(code)) attempted = -Infinity;
       update({ error:code, ...(!transient.has(code) ? { snapshot:null, organizations:null } : {}) });
     }
     async function refresh(context, { force = false } = {}) {
       if (context.signal.aborted) return;
       if (loginKey(context.login) !== state.account) scope(context.login);
-      if (!force && (active || context.at - attempted < interval)) return;
+      if (!force && active) return;
       active?.abort();
       const run = active = new AbortController();
       const current = () => active === run && !context.signal.aborted;
       const abort = () => { if (active === run) cancel(); };
-      const scoped = { ...context, signal:run.signal };
+      const scoped = { ...context, period:state.period, signal:run.signal };
       context.signal.addEventListener('abort', abort, { once:true });
-      attempted = context.at;
       update({ loading:true, error:null });
       let discovering = true;
       try {
@@ -134,5 +137,5 @@
   }
 
   if (typeof module === 'object') module.exports = { leaderboard, organizations, standings, memberLimit };
-  else globalThis.gitGazeLeaderboard = { leaderboard, memberLimit };
+  else globalThis.gitGazeLeaderboard = { leaderboard, memberLimit, periods };
 })();

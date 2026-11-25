@@ -59,6 +59,7 @@ internal sealed class LocalServices : IDisposable
         {
             "appearance" => pair.Value?.GetValue<string>() is "system" or "light" or "dark",
             "historyWeeks" => pair.Value?.GetValue<int>() is 26 or 53,
+            "leaderboardPeriod" => pair.Value?.GetValue<string>() is "today" or "week" or "month" or "year",
             "reminderHour" => pair.Value?.GetValue<int>() is >= 0 and <= 23,
             "leaderboardOrganization" => pair.Value is JsonObject org && org.Count == 2 &&
                 Login.IsMatch(org["account"]?.GetValue<string>() ?? "") && NodeId.IsMatch(org["id"]?.GetValue<string>() ?? ""),
@@ -133,7 +134,7 @@ internal sealed class LocalServices : IDisposable
         return Login.IsMatch(variables["login"]!.GetValue<string>()) && NodeId.IsMatch(variables["org"]!.GetValue<string>()) &&
             DateTimeOffset.TryParseExact(variables["from"]!.GetValue<string>(), format, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var start) &&
             DateTimeOffset.TryParseExact(variables["to"]!.GetValue<string>(), format, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var end) &&
-            end - start == TimeSpan.FromDays(30);
+            end >= start && end - start <= TimeSpan.FromDays(366);
     }
 
     private static async Task<string?> CliToken()
