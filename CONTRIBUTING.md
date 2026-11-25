@@ -46,7 +46,7 @@ Open port 8000 on localhost. In a separate terminal, run the browser checks (Nod
 
 ```sh
 tools=$(mktemp -d)
-npm install --prefix "$tools" playwright@1.58.2 axe-core@4.11.1
+npm install --prefix "$tools" playwright@1.58.2 axe-core@4.14.1
 "$tools/node_modules/.bin/playwright" install chromium webkit
 NODE_PATH="$tools/node_modules" node scripts/check-site.cjs
 ```

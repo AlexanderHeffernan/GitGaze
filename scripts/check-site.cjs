@@ -20,10 +20,16 @@ async function checkCopy(page, action) {
 
 async function audit(page, label) {
   await page.addScriptTag({ path: axe });
-  const violations = await page.evaluate(async () => (await axe.run({
-    runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] },
-  })).violations.map(({ id, nodes }) => ({ id, targets: nodes.map(node => node.target) })));
-  assert.deepEqual(violations, [], label);
+  const { version, violations, menuPassed } = await page.evaluate(async () => {
+    const { violations, passes } = await axe.run({ runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] } });
+    return {
+      version: axe.version,
+      violations: violations.map(({ id, nodes }) => ({ id, targets: nodes.map(node => node.target) })),
+      menuPassed: passes.find(rule => rule.id === 'label-content-name-mismatch')?.nodes.some(node => node.target.includes('.menu-item')),
+    };
+  });
+  assert.deepEqual(violations, [], `${label} (axe ${version})`);
+  assert(menuPassed, `${label}: axe ${version} must check the demo menu’s label`);
 }
 
 async function main() {
@@ -36,7 +42,7 @@ async function main() {
     assert.equal((await page.goto(url)).status(), 200);
     assert.equal(await page.locator('#install-command').textContent(), command);
     assert.equal(await page.locator('.setup a').filter({ hasText: 'Download ZIP' }).getAttribute('href'), archive);
-    const menu = page.getByRole('button', { name: /^GitGaze menu/ });
+    const menu = page.getByRole('button', { name: '12 14d, GitGaze menu', exact: true });
     const popover = page.locator('#popover');
     const grid = page.getByRole('img', { name: 'Sample contribution heatmap, one year' });
     await grid.waitFor();
@@ -44,7 +50,7 @@ async function main() {
     const yearLevels = await levels(grid);
     assert.equal(yearLevels.at(-15), 0);
     assert(yearLevels.slice(-14).every(level => level > 0));
-    assert.match(await menu.getAttribute('aria-label'), /12 contributions today and a 14-day streak/);
+    assert.equal(await menu.getAttribute('aria-description'), '12 contributions today and a 14-day streak');
     assert.equal(await page.locator('[data-stat="streak"]').textContent(), '14');
 
     for (const width of [320, 390, 540, 541, 768, 780, 781, 1024, 1280, 1440]) {
@@ -110,7 +116,7 @@ async function main() {
     assert.equal(await page.locator('.theme[open]').count(), 0);
     assert(await page.locator('.theme-button').evaluate(el => document.activeElement === el));
     assert.deepEqual(await popover.boundingBox().then(({ width, height }) => [width, height]), [384, 640]);
-    await menu.click();
+    await menu.press('Space');
     assert.equal(await menu.getAttribute('aria-expanded'), 'false');
     assert.equal(await popover.isVisible(), false);
     await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -159,7 +165,7 @@ async function main() {
     assert(await page.evaluate(() => matchMedia('(pointer: coarse)').matches && document.documentElement.scrollWidth === innerWidth));
     await audit(page, 'Mobile axe violations');
     assert(await page.locator('.friend').last().evaluate(row => row.getBoundingClientRect().bottom <= row.closest('.app-body').getBoundingClientRect().bottom));
-    const menu = page.getByRole('button', { name: /^GitGaze menu/ });
+    const menu = page.getByRole('button', { name: '12 14d, GitGaze menu', exact: true });
     await menu.tap();
     assert.equal(await menu.getAttribute('aria-expanded'), 'false');
     await menu.tap();

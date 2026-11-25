@@ -87,7 +87,8 @@ const dailyBest = Math.max(...activity);
 const stats = { today, dailyBest, streak, bestStreak, chargeStreak: `${streak}d`,
   toBeat: `${dailyBest - today + 1} to beat it`, year: sum(activity).toLocaleString('en-US'), week: sum(activity.slice(-3)) };
 document.querySelectorAll('[data-stat]').forEach(el => { el.textContent = stats[el.dataset.stat]; });
-menu.setAttribute('aria-label', `GitGaze menu, ${today} contributions today and a ${streak}-day streak`);
+menu.setAttribute('aria-label', `${today} ${stats.chargeStreak}, GitGaze menu`);
+menu.setAttribute('aria-description', `${today} contributions today and a ${streak}-day streak`);
 
 function drawHeatmap(weeks, target = heatmap, seed = 0, miniature = false) {
   const short = weeks === 26;
