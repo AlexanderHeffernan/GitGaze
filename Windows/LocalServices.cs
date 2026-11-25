@@ -58,11 +58,18 @@ internal sealed class LocalServices : IDisposable
         if (changes == null || !changes.All(pair => pair.Key switch
         {
             "appearance" => pair.Value?.GetValue<string>() is "system" or "light" or "dark",
+            "palette" => pair.Value?.GetValue<string>() is "violet" or "coral" or "ice" or "graphite" or "mint" or "rose" or "amber" or "cobalt" or "orchid" or "lagoon" or "custom",
+            "customLight" or "customDark" => Regex.IsMatch(pair.Value?.GetValue<string>() ?? "", @"\A[0-9A-Fa-f]{6}\z"),
             "historyWeeks" => pair.Value?.GetValue<int>() is 26 or 53,
             "leaderboardPeriod" => pair.Value?.GetValue<string>() is "today" or "week" or "month" or "year",
             "reminderHour" => pair.Value?.GetValue<int>() is >= 0 and <= 23,
             "leaderboardOrganization" => pair.Value is JsonObject org && org.Count == 2 &&
                 Login.IsMatch(org["account"]?.GetValue<string>() ?? "") && NodeId.IsMatch(org["id"]?.GetValue<string>() ?? ""),
+            "comparisonYear" => pair.Value?.GetValue<int>() is 0 or >= 2008 and <= 9999,
+            "comparisonMode" => pair.Value?.GetValue<string>() is "ytd" or "full",
+            "favourites" or "favouriteOrder" => pair.Value is JsonArray logins && logins.Count <= 10000 &&
+                logins.All(login => Regex.IsMatch(login?.GetValue<string>() ?? "", @"\A[A-Za-z0-9][A-Za-z0-9-]{0,38}\z")) &&
+                logins.Select(login => login!.GetValue<string>()).Distinct().Count() == logins.Count,
             "modules" or "hidden" => pair.Value is JsonArray ids && ids.Count <= 32 &&
                 ids.All(id => WidgetId.IsMatch(id?.GetValue<string>() ?? "")) && ids.Select(id => id!.GetValue<string>()).Distinct().Count() == ids.Count,
             _ => false

@@ -12,12 +12,39 @@
 
   function activity({ request, core, onChange, onVerifiedRefresh, onViewerFailure, registry, now = () => new Date() }) {
     let prefs, dashboard, error, pending = false, attempted = -Infinity, historyAt = -Infinity, followingAt = -Infinity, knownViewer, extension, queuedExtension, verifying;
+    let peopleLimit = 12, peopleBusy = false, peopleRequested = false, generation = 0;
     const today = () => core.localDay(now());
     const snapshot = () => ({ today: today(), dashboard, preferences: prefs, live: true,
       status: pending ? 'Refreshing…' : error ? dashboard ? 'Cached activity · refresh failed' : 'Not connected' : dashboard ? 'Updated' : 'Not connected', error });
     const publish = () => onChange(snapshot());
     const cache = async () => { await request('writeCache', dashboard); };
     const query = (operation, variables = {}) => request('github', { operation, variables });
+
+    async function loadPeople(limit = peopleLimit) {
+      peopleLimit = Math.max(limit, peopleLimit);
+      peopleRequested = true;
+      if (pending || peopleBusy || !knownViewer || !dashboard) return;
+      const scope = generation;
+      const names = [...new Set([...core.orderPeople(dashboard.following, prefs).slice(0, peopleLimit).map(p => p.login),
+        ...prefs.favourites.filter(login => dashboard.following.some(p => p.login === login))])].filter(login => !Object.hasOwn(dashboard.people, login));
+      peopleRequested = false;
+      if (!names.length) return;
+      peopleBusy = true;
+      try {
+        const added = Object.create(null);
+        for (let i = 0; i < names.length; i += 4) {
+          if (scope !== generation) return;
+          await Promise.all(names.slice(i, i + 4).map(async login => {
+            const node = (await query('profile', { login })).user;
+            if (node) added[login] = readProfile(node);
+          }));
+        }
+        if (scope !== generation) return;
+        dashboard = { ...dashboard, people:{ ...dashboard.people, ...added } };
+        await cache(); publish();
+      } catch (e) { if (scope === generation) { error = e.message; publish(); } }
+      finally { peopleBusy = false; if (peopleRequested && !pending) void loadPeople(); }
+    }
 
     async function refresh({ force = false, background = false, extensionForce = false } = {}) {
       const at = +now();
@@ -26,6 +53,7 @@
         return;
       }
       if (!force && (background ? at - attempted < 300000 : dashboard && at - +core.cacheTimestamp(dashboard.updatedAt) < 30000)) return;
+      generation++;
       pending = true; attempted = at; error = undefined; publish();
       let verified = false;
       let finishVerification;
@@ -36,7 +64,7 @@
         const matching = dashboard && !core.accountChanged(dashboard, profile.person.login) ? dashboard : null;
         if (knownViewer !== profile.person.login.toLowerCase()) {
           extension?.abort(); extension = undefined;
-          knownViewer = profile.person.login.toLowerCase(); historyAt = followingAt = -Infinity;
+          knownViewer = profile.person.login.toLowerCase(); historyAt = followingAt = -Infinity; peopleLimit = 12;
         }
         verifying = undefined; finishVerification();
         dashboard = { profile, history: matching?.history ?? [], historyComplete: matching?.historyComplete ?? false,
@@ -77,8 +105,8 @@
             following.push(...page.nodes.filter(Boolean));
             after = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
           } while (after);
-          const accounts = [...new Set([...following.slice(0, 12).map(p => p.login), ...prefs.favourites.filter(login => following.some(p => p.login === login))])];
-          const people = { ...dashboard.people };
+          const accounts = [...new Set([...core.orderPeople(following, prefs).slice(0, peopleLimit).map(p => p.login), ...prefs.favourites.filter(login => following.some(p => p.login === login))])];
+          const people = Object.assign(Object.create(null), dashboard.people);
           for (let i = 0; i < accounts.length; i += 4) {
             await Promise.all(accounts.slice(i, i + 4).map(async login => {
               const node = (await query('profile', { login })).user;
@@ -91,6 +119,7 @@
       } catch (e) {
         error = e.message;
         if (!verified) {
+          knownViewer = undefined;
           extension?.abort(); extension = undefined;
           verifying = undefined; finishVerification();
           onViewerFailure?.({ at, code: e.code ?? 'unknown' });
@@ -101,7 +130,10 @@
         const queued = queuedExtension;
         queuedExtension = undefined;
         if (queued) void refresh({ force:true, extensionForce:true });
-        else publish();
+        else {
+          publish();
+          if (peopleRequested && knownViewer) void loadPeople();
+        }
       }
     }
 
@@ -124,7 +156,7 @@
         try { await request('writePreferences', changes); }
         catch (e) { error = e.message; publish(); }
       },
-      refresh, snapshot
+      refresh, snapshot, loadPeople
     };
   }
 

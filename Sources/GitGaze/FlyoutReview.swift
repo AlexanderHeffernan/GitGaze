@@ -18,6 +18,8 @@ struct FlyoutFixture: Decodable {
     private var close: (() -> Void)?
     weak var view: WKWebView?
     private var liveController: NSViewController?
+    private var started = ContinuousClock.now
+    private(set) var phases: [String] = []
     private let local: SharedMacLocal?
 
     init(mode: String, local: SharedMacLocal? = nil) throws {
@@ -35,6 +37,8 @@ struct FlyoutFixture: Decodable {
             view?.evaluateJavaScript("window.gitGazeOpen?.()", completionHandler: nil)
             return liveController
         }
+        started = .now
+        phases = []
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .nonPersistent()
         configuration.userContentController.add(self, name: "gitgaze")
@@ -46,6 +50,7 @@ struct FlyoutFixture: Decodable {
         controller.view = web
         if local != nil { liveController = controller }
         web.loadFileURL(root.appendingPathComponent("dashboard.html"), allowingReadAccessTo: root)
+        phases.append("load submitted: \(started.duration(to: .now))")
         return controller
     }
 
@@ -68,8 +73,12 @@ struct FlyoutFixture: Decodable {
               let state = message.body as? [String: Any], let action = state["action"] as? String else { return }
         switch action {
         case "ready":
+            phases.append("bridge ready: \(started.duration(to: .now))")
             if local == nil {
-                view?.callAsyncJavaScript("window.gitGazeReceive(snapshot)", arguments: ["snapshot": snapshot], in: nil, in: .page, completionHandler: nil)
+                view?.callAsyncJavaScript("const start = performance.now(); window.gitGazeReceive(snapshot); return performance.now() - start;", arguments: ["snapshot": snapshot], in: nil, in: .page) { [weak self, started] result in
+                    guard let self, self.started == started, let elapsed = try? result.get() else { return }
+                    self.phases.append("fixture rendered: \(started.duration(to: .now)); JS receive/render: \(elapsed) ms")
+                }
             } else { view?.evaluateJavaScript("window.gitGazeStart()", completionHandler: nil) }
         case "preferences":
             snapshot["preferences"] = state["value"]
@@ -147,7 +156,16 @@ struct FlyoutFixture: Decodable {
             guard let pair = value as? [String: Any], pair.count == 2 else { return false }
             return login(pair["account"]) && nodeID(pair["id"])
         case "appearance": return ["system", "light", "dark"].contains(value as? String ?? "")
+        case "palette": return Palette(rawValue: value as? String ?? "") != nil
+        case "customLight", "customDark": return (value as? String)?.wholeMatch(of: /[0-9A-Fa-f]{6}/) != nil
         case "historyWeeks": return [26, 53].contains(value as? Int ?? 0)
+        case "comparisonMode": return ["ytd", "full"].contains(value as? String ?? "")
+        case "favourites", "favouriteOrder":
+            guard let logins = value as? [String], logins.count <= 10_000, Set(logins).count == logins.count else { return false }
+            return logins.allSatisfy { $0.wholeMatch(of: /[A-Za-z0-9][A-Za-z0-9-]{0,38}/) != nil }
+        case "comparisonYear":
+            guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID(), let year = value as? Int else { return false }
+            return year == 0 || (2008...9999).contains(year)
         case "reminderHour":
             guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID(), let hour = value as? Int else { return false }
             return (0...23).contains(hour)
@@ -438,6 +456,7 @@ extension AppDelegate {
             }
             facts.append("\(mode): programmatic open to laid-out content \(opening.duration(to: .now)) (animation off; not input-to-screen)")
             await settle()
+            if mode == "shared" { facts.append("cold WebKit: " + review.phases.joined(separator: "; ")) }
             guard let controller = reviewPopover.contentViewController, let window = controller.view.window else {
                 try require(false, "Cannot find popover window (shown=\(reviewPopover.isShown), screens=\(NSScreen.screens.count))")
                 return
@@ -466,7 +485,27 @@ extension AppDelegate {
                 try require(gallery == "7,0,0,0,0,0,0|12,23,5", "Gallery must render Monday-first contributions and personal bests: \(gallery ?? "nil")")
                 await settle()
                 try await review.capture(controller, to: output + "/shared-gallery.png")
-                _ = try await review.evaluate("document.querySelector('[aria-label=\"Back to dashboard\"]').click();void 0")
+                let years = try await review.evaluate("""
+                    document.querySelector('[aria-label="Add Year in perspective"]').click();
+                    document.querySelector('[aria-label="Back to dashboard"]').click();
+                    const card = () => document.querySelector('[data-widget="years"]');
+                    const summary = () => card().querySelector('.year-delta').textContent + '|' + card().querySelector('svg').getAttribute('aria-label');
+                    const ytd = summary();
+                    card().querySelector('[aria-label="Configure Year in perspective"]').click();
+                    const field = card().querySelector('[aria-label="Period"]');
+                    field.focus(); field.value = 'full'; field.dispatchEvent(new Event('change'));
+                    const retained = document.activeElement.getAttribute('aria-label');
+                    card().querySelector('[aria-label="Back from Year in perspective"]').click();
+                    ytd + '|' + retained + '|' + summary()
+                    """) as? String
+                let olderYTD = stats.total(inYear: 2023, throughMonthDay: "03-04")
+                let olderFull = stats.total(inYear: 2023, throughMonthDay: "12-31")
+                try require(olderYTD == 11 && olderFull == 44, "Unexpected Swift year fixture totals")
+                try require(years == "+22|2024 and 2023 cumulative contributions, same point in each year|Period|−11|2024 and 2023 cumulative contributions, full years", "Year comparison fixture: \(years ?? "nil")")
+                _ = try await review.evaluate("document.querySelector('[data-widget=years]').scrollIntoView();void 0")
+                await settle()
+                try await review.capture(controller, to: output + "/shared-year-full.png")
+                _ = try await review.evaluate("document.querySelector('[aria-label=\"Remove Year in perspective\"]').click();document.querySelector('main').scrollTop=0;void 0")
                 let focused = try await review.evaluate("document.querySelector('[aria-label=\"Configure Contribution history\"]').click();document.activeElement.tagName") as? String
                 try require(focused == "SELECT", "Widget back should move focus into its native-styled selector")
                 await settle()
@@ -475,6 +514,32 @@ extension AppDelegate {
                 try require(restored == "Configure Contribution history", "Selection must restore focus")
                 await settle()
                 try await review.capture(controller, to: output + "/shared-six-months.png")
+                let people = try await review.evaluate("""
+                    const configure = () => document.querySelector('[aria-label="Configure Favourite people"]').click();
+                    configure();
+                    const search = document.activeElement;
+                    search.value = 'no-match'; search.dispatchEvent(new Event('input'));
+                    const empty = document.querySelector('.people-list').textContent;
+                    search.value = 'MIRA'; search.dispatchEvent(new Event('input'));
+                    document.querySelector('[aria-label="Unfavourite mira-fixture"]').click();
+                    const available = !!document.querySelector('[aria-label="Favourite mira-fixture"]');
+                    document.querySelector('[aria-label="Favourite mira-fixture"]').click();
+                    empty + '|' + available + '|' + !!document.querySelector('[aria-label="Unfavourite mira-fixture"]')
+                    """) as? String
+                try require(people == "No matching people|true|true", "Favourites search and toggle: \(people ?? "nil")")
+                await settle()
+                try await review.capture(controller, to: output + "/shared-people-settings.png")
+                let theme = try await review.evaluate("""
+                    document.querySelector('[aria-label="Settings"]').click();
+                    document.querySelector('[aria-label="Custom theme"]').click();
+                    const color = document.querySelector('[aria-label="Light accent"]');
+                    color.value = '#236b8e'; color.dispatchEvent(new Event('change'));
+                    getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()
+                    """) as? String
+                try require(theme == "#236B8E", "Custom accent did not render: \(theme ?? "nil")")
+                await settle()
+                try await review.capture(controller, to: output + "/shared-appearance.png")
+                _ = try await review.evaluate("document.querySelector('[aria-label=\"Violet theme\"]').click();document.querySelector('[aria-label=\"Back to dashboard\"]').click();document.querySelector('[aria-label=\"Configure Contribution history\"]').focus();void 0")
                 _ = try await review.evaluate("document.activeElement.click();document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}));void 0")
                 let escaped = try await review.evaluate("document.activeElement.getAttribute('aria-label')") as? String
                 try require(escaped == "Configure Contribution history", "Escape must restore focus")
@@ -490,7 +555,15 @@ extension AppDelegate {
             }
             try require(!reviewPopover.isShown, "Popover should close")
             try require(reviewPopover.contentViewController == nil, "Popover should release its presentation")
+            let reopening = ContinuousClock.now
             _ = applicationShouldHandleReopen(NSApp, hasVisibleWindows: false)
+            if mode == "shared" {
+                for _ in 0..<80 {
+                    if (try? await review.evaluate("document.querySelector('.number')?.textContent")) as? String == "7" { break }
+                    try? await Task.sleep(for: .milliseconds(25))
+                }
+                facts.append("warm process, recreated WKWebView: \(reopening.duration(to: .now)); " + review.phases.joined(separator: "; "))
+            }
             await settle()
             try require(reviewPopover.isShown && reviewPopover.contentViewController !== controller, "Reopen should allocate a fresh presentation")
             if mode == "shared" {
