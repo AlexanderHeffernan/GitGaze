@@ -26,6 +26,47 @@ jobs:
         with:
           node-version: '24'
       - run: node --test SharedClient/core.test.js SharedClient/activity.test.js
+      - name: Probe hosted Explorer desktop capability (not an app test)
+        if: matrix.arch == 'arm64' && github.event_name == 'push'
+        timeout-minutes: 1
+        shell: pwsh
+        run: |
+          Add-Type @'
+          using System;
+          using System.Runtime.InteropServices;
+          public static class DesktopProbe {
+              [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+              public static extern IntPtr FindWindow(string className, string title);
+              [DllImport("user32.dll")]
+              public static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
+          }
+          '@
+          $session = (Get-Process -Id $PID).SessionId
+          $explorer = @(Get-Process explorer -ErrorAction SilentlyContinue | Where-Object SessionId -eq $session)
+          $tray = [DesktopProbe]::FindWindow('Shell_TrayWnd', $null)
+          [uint32]$owner = 0
+          if ($tray -ne [IntPtr]::Zero) { [void][DesktopProbe]::GetWindowThreadProcessId($tray, [ref]$owner) }
+          $sameSessionTray = $owner -ne 0 -and $owner -in $explorer.Id
+          "Job session: $session; same-session Explorer processes: $($explorer.Count); Explorer-owned Shell_TrayWnd: $sameSessionTray"
+          try {
+            Add-Type -AssemblyName System.Drawing.Common
+            Add-Type -AssemblyName System.Windows.Forms
+            $bounds = [Windows.Forms.SystemInformation]::VirtualScreen
+            if ($bounds.Width -lt 1 -or $bounds.Height -lt 1 -or $bounds.Width -gt 8192 -or $bounds.Height -gt 8192) { throw 'No usable screen bounds' }
+            $bitmap = [Drawing.Bitmap]::new($bounds.Width, $bounds.Height)
+            try {
+              $graphics = [Drawing.Graphics]::FromImage($bitmap)
+              try { $graphics.CopyFromScreen($bounds.Location, [Drawing.Point]::Empty, $bounds.Size) } finally { $graphics.Dispose() }
+              $colors = [Collections.Generic.HashSet[int]]::new()
+              for ($y = 0; $y -lt $bounds.Height; $y += 8) {
+                for ($x = 0; $x -lt $bounds.Width; $x += 8) { [void]$colors.Add($bitmap.GetPixel($x, $y).ToArgb()) }
+              }
+              "Desktop CopyFromScreen: succeeded ($($bounds.Width)x$($bounds.Height)); non-uniform sampled pixels: $($colors.Count -gt 1)"
+            } finally { $bitmap.Dispose() }
+          } catch {
+            "Desktop CopyFromScreen: unavailable ($($_.Exception.GetBaseException().Message))"
+          }
+          # Images are not written or uploaded. A usable screen is not evidence of tray behavior.
       - name: Publish review payload and run native process smoke test
         shell: pwsh
         run: |
