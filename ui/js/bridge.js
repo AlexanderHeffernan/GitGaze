@@ -3,7 +3,7 @@
 
 import { dayKey, offset } from './stats.js';
 
-const tauri = window.__TAURI__;
+const tauri = globalThis.__TAURI__;
 export const native = Boolean(tauri);
 
 export function invoke(command, args = {}) {
@@ -84,10 +84,20 @@ async function preview(command, args) {
     case 'github_connect': return null;
     case 'launch_at_login': return false;
     case 'set_launch_at_login': return args.enabled;
-    case 'load_state': return { preferences: previewPrefs ?? { hidden: ['records', 'people', 'years'], favourites: ['torvalds', 'gaearon', 'yyx990803'] }, migrated: false, cache: null };
+    case 'load_state': return { preferences: previewPrefs ?? { modules: ['today', 'streak', 'heatmap', 'favourites', 'leaderboard'], hidden: ['records', 'people', 'years'], favourites: ['torvalds', 'gaearon', 'yyx990803'] }, migrated: false, cache: null };
     case 'save_preferences': previewPrefs = args.preferences; return null;
     case 'github_query': {
       const { query, variables } = args;
+      if (query.includes('organizations(')) return { viewer: { organizations: { nodes: [{ id: 'O_1', login: 'acme', name: 'Acme Labs', avatarUrl: '' }, { id: 'O_2', login: 'octo-collective', name: 'Octo Collective', avatarUrl: '' }] } } };
+      if (query.includes('membersWithRole')) {
+        const members = [['you', 'You'], ...sample.slice(0, 11)];
+        const span = Math.max(1, Math.round((Date.now() - Date.parse(variables.from)) / 86400000));
+        return { organization: { membersWithRole: { totalCount: members.length, pageInfo: { hasNextPage: false, endCursor: null }, nodes: members.map(([login, name]) => {
+          const next = random([...login + variables.org].reduce((sum, c) => (sum * 31 + c.charCodeAt(0)) >>> 0, 3));
+          const total = Math.floor(next() * 6 * span);
+          return { login, name, avatarUrl: '', contributionsCollection: { totalCommitContributions: total, totalIssueContributions: 0, totalPullRequestContributions: Math.floor(total / 4), totalPullRequestReviewContributions: 0 } };
+        }) } } };
+      }
       if (query.includes('following(')) return { viewer: { following: { nodes: sample.map(person), pageInfo: { hasNextPage: false, endCursor: null } } } };
       if (variables.from) {
         const year = variables.from.slice(0, 4);

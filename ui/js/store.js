@@ -3,6 +3,7 @@
 
 import { invoke, listen, plugin, native } from './bridge.js';
 import * as github from './github.js';
+import * as leaderboard from './leaderboard.js';
 import { Stats, IncreaseTracker, dayKey } from './stats.js';
 import { reduceMotion, accent, gold, systemDark } from './theme.js';
 
@@ -11,18 +12,19 @@ const REFERENCE = 978307200;
 const nowSeconds = () => Date.now() / 1000 - REFERENCE;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-export const modules = ['today', 'streak', 'heatmap', 'favourites', 'momentum', 'records', 'people', 'years'];
+export const modules = ['today', 'streak', 'heatmap', 'favourites', 'momentum', 'records', 'people', 'years', 'leaderboard'];
 export const moduleTitles = {
   today: 'Today', streak: 'Your streak', heatmap: 'Contribution history', favourites: 'Favourite people',
   momentum: 'Weekly momentum', records: 'Personal bests', people: 'People you follow', years: 'Year in perspective',
+  leaderboard: 'Organisation leaderboard',
 };
 
 const defaults = {
-  modules, hidden: ['momentum', 'records', 'people', 'years'], favourites: [], favouriteOrder: [],
+  modules, hidden: ['momentum', 'records', 'people', 'years', 'leaderboard'], favourites: [], favouriteOrder: [],
   palette: 'violet', customLight: '6E4AC9', customDark: 'B09CFF', menuStyle: 'charge', menuStreak: false,
   appearance: 'system', notifications: false, visualCelebrations: true, celebrationStyle: 'fireworks',
   streakReminder: false, reminderHour: 18, lastReminderDay: null, detectPushes: false,
-  historyWeeks: 53, comparisonYear: 0, comparisonMode: 'ytd', autoUpdate: true, lastUpdateCheck: 0,
+  historyWeeks: 53, comparisonYear: 0, comparisonMode: 'ytd', leaderboardOrg: null, leaderboardPeriod: 'week', autoUpdate: true, lastUpdateCheck: 0,
 };
 
 /** Accepts saved preferences, including the previous macOS app's user defaults. */
@@ -33,7 +35,8 @@ function normalise(saved) {
   const savedModules = Array.isArray(saved?.modules) ? saved.modules.filter(m => modules.includes(m)) : [];
   prefs.modules = [...new Set([...savedModules, ...modules])];
   prefs.hidden = Array.isArray(prefs.hidden) ? prefs.hidden.filter(m => modules.includes(m)) : defaults.hidden;
-  if (!savedModules.includes('years') && !prefs.hidden.includes('years')) prefs.hidden.push('years');
+  // Widgets added after someone arranged their dashboard start hidden; they're in the gallery.
+  for (const added of ['years', 'leaderboard']) if (!savedModules.includes(added) && !prefs.hidden.includes(added)) prefs.hidden.push(added);
   return prefs;
 }
 
@@ -51,6 +54,7 @@ export class Store {
   ghInstalled = true;
   platform = 'macos';
   celebration = null;
+  board = { organizations: null, result: null, loading: false, error: null, key: null, fetchedAt: 0 };
   flashing = false;
   stats = null;
   orderedPeople = [];
@@ -241,10 +245,34 @@ export class Store {
           if (current()) { this.peopleError = String(error.message ?? error); this.changed(); }
         }
       }
+      if (includeHistoryAndPeople && current()) void this.loadLeaderboard();
     } catch (error) {
       if (current()) this.error = String(error.message ?? error);
     } finally {
       if (current()) { this.loading = false; this.changed(); }
+    }
+  }
+
+  /** Loads the leaderboard only while its widget is on the dashboard; results last five minutes. */
+  async loadLeaderboard(force = false) {
+    if (!this.#connected || !this.visibleModules.includes('leaderboard') || (this.board.loading && !force)) return;
+    const generation = this.#session;
+    const update = patch => { if (generation === this.#session) { this.board = { ...this.board, ...patch }; this.changed(); } };
+    update({ loading: true, error: null });
+    try {
+      const organizations = this.board.organizations && !force ? this.board.organizations : await leaderboard.organizations();
+      update({ organizations });
+      const organization = organizations.find(o => o.login === this.prefs.leaderboardOrg) ?? organizations[0];
+      if (!organization) return update({ result: null, key: null });
+      const key = `${organization.login}|${this.prefs.leaderboardPeriod}|${this.today}`;
+      if (!force && key === this.board.key && Date.now() - this.board.fetchedAt < 300_000) return;
+      if (key !== this.board.key) update({ result: null });
+      const result = await leaderboard.standings(organization, this.prefs.leaderboardPeriod);
+      update({ result: { ...result, organization }, key, fetchedAt: Date.now() });
+    } catch (error) {
+      update({ error: String(error.message ?? error) });
+    } finally {
+      update({ loading: false });
     }
   }
 
@@ -306,6 +334,7 @@ export class Store {
 
   setHidden(module, hidden) {
     this.set({ hidden: hidden ? [...this.prefs.hidden, module] : this.prefs.hidden.filter(m => m !== module) });
+    if (module === 'leaderboard' && !hidden) void this.loadLeaderboard();
   }
 
   async useCLI() {
@@ -324,6 +353,7 @@ export class Store {
         this.#session += 1;
         this.#setDashboard(null);
         this.#increases = new IncreaseTracker();
+        this.board = { organizations: null, result: null, loading: false, error: null, key: null, fetchedAt: 0 };
         this.#clearCelebration();
         this.#activity = null;
       }
