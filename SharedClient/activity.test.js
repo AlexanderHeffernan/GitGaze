@@ -95,3 +95,17 @@ test('an opt-in widget stays in the gallery until enabled and survives restart a
   await restarted.start();
   assert.deepEqual(restarted.snapshot().preferences.hidden, []);
 });
+
+test('viewer failure notifies the extension even with a cached account, without starting its refresh', async () => {
+  const failures = [];
+  const engine = activity({ core, now: () => new Date(1000), onChange() {},
+    onVerifiedRefresh() { assert.fail('cached identity is not verification'); },
+    onViewerFailure: failure => failures.push(failure), async request(method) {
+      if (method === 'readLocal') return { dashboard, preferences: {} };
+      throw Object.assign(new Error('denied'), { code: 'access' });
+    }
+  });
+  await engine.start();
+  assert.deepEqual(failures, [{ at:1000, code:'access' }]);
+  assert.equal(engine.snapshot().dashboard, dashboard);
+});

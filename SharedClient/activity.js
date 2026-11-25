@@ -10,7 +10,7 @@
       totalContributions: contributionCalendar.totalContributions, days: contributionCalendar.weeks.flatMap(w => w.contributionDays) };
   }
 
-  function activity({ request, core, onChange, onVerifiedRefresh, registry, now = () => new Date() }) {
+  function activity({ request, core, onChange, onVerifiedRefresh, onViewerFailure, registry, now = () => new Date() }) {
     let prefs, dashboard, error, pending = false, attempted = -Infinity, historyAt = -Infinity, followingAt = -Infinity, knownViewer, extension;
     const today = () => core.localDay(now());
     const snapshot = () => ({ today: today(), dashboard, preferences: prefs, live: true,
@@ -24,8 +24,10 @@
       if (pending || !force && (background ? at - attempted < 300000 : dashboard && at - +core.cacheTimestamp(dashboard.updatedAt) < 30000)) return;
       extension?.abort();
       pending = true; attempted = at; error = undefined; publish();
+      let verified = false;
       try {
         const profile = readProfile((await query('viewer')).viewer);
+        verified = true;
         const matching = dashboard && !core.accountChanged(dashboard, profile.person.login) ? dashboard : null;
         if (knownViewer !== profile.person.login.toLowerCase()) {
           knownViewer = profile.person.login.toLowerCase(); historyAt = followingAt = -Infinity;
@@ -75,7 +77,10 @@
           dashboard = { ...dashboard, following, people };
           followingAt = at; await cache();
         }
-      } catch (e) { error = e.message; }
+      } catch (e) {
+        error = e.message;
+        if (!verified) onViewerFailure?.({ at, code: e.code ?? 'unknown' });
+      }
       finally { pending = false; publish(); }
     }
 
