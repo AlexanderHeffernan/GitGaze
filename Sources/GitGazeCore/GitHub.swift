@@ -2,8 +2,13 @@ import Foundation
 
 public enum GitHubError: LocalizedError {
     case message(String)
+    case classified(String, code: String)
+    public var code: String {
+        if case .classified(_, let code) = self { return code }
+        return "unknown"
+    }
     public var errorDescription: String? {
-        switch self { case .message(let message): return message }
+        switch self { case .message(let message), .classified(let message, _): return message }
     }
 }
 
@@ -19,15 +24,25 @@ public struct GitHubClient: Sendable {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("GitGaze/1.0", forHTTPHeaderField: "User-Agent")
         request.httpBody = try JSONSerialization.data(withJSONObject: ["query": query, "variables": variables])
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw GitHubError.message("GitHub did not respond.") }
-        if http.statusCode == 401 { throw GitHubError.message("Your GitHub CLI session expired. Run gh auth login, then relaunch GitGaze.") }
-        if http.statusCode == 403 || http.statusCode == 429 {
-            throw GitHubError.message("GitHub is limiting requests. Your saved contributions are still here; try again later.")
+        let (data, response): (Data, URLResponse)
+        do { (data, response) = try await URLSession.shared.data(for: request) }
+        catch let error as URLError where [.notConnectedToInternet, .timedOut, .cannotConnectToHost, .cannotFindHost, .networkConnectionLost, .dnsLookupFailed].contains(error.code) {
+            throw GitHubError.classified(error.localizedDescription, code: "network")
         }
-        guard http.statusCode == 200 else { throw GitHubError.message("GitHub returned HTTP \(http.statusCode). Try again shortly.") }
+        guard let http = response as? HTTPURLResponse else { throw GitHubError.message("GitHub did not respond.") }
+        if http.statusCode == 401 { throw GitHubError.classified("Your GitHub CLI session expired. Run gh auth login, then relaunch GitGaze.", code: "access") }
+        if http.statusCode == 403 || http.statusCode == 429 {
+            let limited = http.statusCode == 429 || http.value(forHTTPHeaderField: "x-ratelimit-remaining") == "0" || http.value(forHTTPHeaderField: "retry-after") != nil
+            throw GitHubError.classified("GitHub is limiting requests. Your saved contributions are still here; try again later.", code: limited ? "rate_limit" : "access")
+        }
+        guard http.statusCode == 200 else { throw GitHubError.classified("GitHub returned HTTP \(http.statusCode). Try again shortly.", code: http.statusCode >= 500 ? "server" : "unknown") }
         let envelope = try JSONDecoder().decode(ErrorEnvelope.self, from: data)
-        if let error = envelope.errors?.first { throw GitHubError.message(error.message) }
+        if let errors = envelope.errors, let error = errors.first {
+            let types = Set(errors.compactMap(\.type))
+            let code = !types.isDisjoint(with: ["FORBIDDEN", "UNAUTHORIZED", "NOT_FOUND", "SAML_ENFORCEMENT"]) ? "access" :
+                errors.allSatisfy { $0.type == "RATE_LIMITED" } ? "rate_limit" : "unknown"
+            throw GitHubError.classified(error.message, code: code)
+        }
         return data
     }
 
@@ -76,7 +91,7 @@ public struct GitHubClient: Sendable {
 }
 
 private struct ErrorEnvelope: Decodable { var errors: [APIError]? }
-private struct APIError: Decodable { var message: String }
+private struct APIError: Decodable { var message: String; var type: String? }
 private struct ViewerEnvelope: Decodable { var data: ViewerData }
 private struct ViewerData: Decodable { var viewer: APIUser }
 private struct UserEnvelope: Decodable { var data: UserData }

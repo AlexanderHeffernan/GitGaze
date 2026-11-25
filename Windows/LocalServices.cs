@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 
 namespace GitGaze;
 
@@ -12,8 +13,12 @@ internal sealed class LocalServices : IDisposable
     private readonly string directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GitGaze");
     private readonly HttpClient http = new(new HttpClientHandler { AllowAutoRedirect = false }) { Timeout = TimeSpan.FromSeconds(30) };
     private readonly JsonObject operations = JsonNode.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "SharedClient", "operations.json")))!.AsObject();
-    private static readonly string[] Widgets = ["today", "streak", "heatmap", "favourites", "momentum", "records", "people", "years"];
+    private static readonly Regex WidgetId = new(@"\A[a-z][a-z0-9-]{0,31}\z", RegexOptions.CultureInvariant);
     private string? token;
+    private sealed class GitHubFailure(string message, string code) : Exception(message)
+    {
+        public string Code => code;
+    }
 
     public async Task<JsonObject> Reply(JsonObject call)
     {
@@ -31,7 +36,17 @@ internal sealed class LocalServices : IDisposable
                 _ => throw new InvalidOperationException("Unsupported host request.")
             };
         }
-        catch (Exception ex) { reply["error"] = ex is InvalidOperationException ? ex.Message : "GitGaze could not complete the local or GitHub request."; }
+        catch (Exception ex)
+        {
+            reply["error"] = ex is GitHubFailure or InvalidOperationException ? ex.Message : "GitGaze could not complete the local or GitHub request.";
+            reply["code"] = ex switch
+            {
+                GitHubFailure failure => failure.Code,
+                TaskCanceledException => "network",
+                HttpRequestException { HttpRequestError: HttpRequestError.NameResolutionError or HttpRequestError.ConnectionError } => "network",
+                _ => "unknown"
+            };
+        }
         return reply;
     }
 
@@ -42,8 +57,8 @@ internal sealed class LocalServices : IDisposable
             "appearance" => pair.Value?.GetValue<string>() is "system" or "light" or "dark",
             "historyWeeks" => pair.Value?.GetValue<int>() is 26 or 53,
             "reminderHour" => pair.Value?.GetValue<int>() is >= 0 and <= 23,
-            "modules" or "hidden" => pair.Value is JsonArray ids && ids.Count <= Widgets.Length &&
-                ids.All(id => Widgets.Contains(id?.GetValue<string>())) && ids.Select(id => id!.GetValue<string>()).Distinct().Count() == ids.Count,
+            "modules" or "hidden" => pair.Value is JsonArray ids && ids.Count <= 32 &&
+                ids.All(id => WidgetId.IsMatch(id?.GetValue<string>() ?? "")) && ids.Select(id => id!.GetValue<string>()).Distinct().Count() == ids.Count,
             _ => false
         })) throw new InvalidOperationException("Invalid preferences.");
         var preferences = Read("preferences.json") ?? new JsonObject();
@@ -77,16 +92,27 @@ internal sealed class LocalServices : IDisposable
                 (pair.Value == null ? pair.Key == "after" : pair.Value.GetValue<string>().Length <= 1024)))
             throw new InvalidOperationException("Unsupported GitHub request.");
         if (operation == "viewer") token = await CliToken();
-        if (string.IsNullOrEmpty(token)) throw new InvalidOperationException("No GitHub CLI session found. Run gh auth login --hostname github.com, then try again.");
+        if (string.IsNullOrEmpty(token)) throw new GitHubFailure("No GitHub CLI session found. Run gh auth login --hostname github.com, then try again.", "access");
         using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.github.com/graphql");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         request.Headers.UserAgent.ParseAdd("GitGaze/1.0");
         request.Content = new StringContent(new JsonObject { ["query"] = query, ["variables"] = variables.DeepClone() }.ToJsonString(), Encoding.UTF8, "application/json");
         using var response = await http.SendAsync(request);
-        if (!response.IsSuccessStatusCode) throw new InvalidOperationException($"GitHub returned HTTP {(int)response.StatusCode}.");
+        if (!response.IsSuccessStatusCode)
+        {
+            var status = (int)response.StatusCode;
+            var limited = status == 429 || status == 403 && (response.Headers.RetryAfter != null ||
+                response.Headers.TryGetValues("x-ratelimit-remaining", out var remaining) && remaining.Contains("0"));
+            throw new GitHubFailure($"GitHub returned HTTP {status}.", limited ? "rate_limit" : status is 401 or 403 ? "access" : status >= 500 ? "server" : "unknown");
+        }
         var envelope = JsonNode.Parse(await response.Content.ReadAsStringAsync());
         if (envelope?["errors"] is JsonArray errors && errors.Count > 0)
-            throw new InvalidOperationException(errors[0]?["message"]?.GetValue<string>() ?? "GitHub rejected the request.");
+        {
+            var types = errors.Select(e => e?["type"]?.GetValue<string>()).ToArray();
+            var code = types.Any(t => t is "FORBIDDEN" or "UNAUTHORIZED" or "NOT_FOUND" or "SAML_ENFORCEMENT") ? "access" :
+                types.All(t => t == "RATE_LIMITED") ? "rate_limit" : "unknown";
+            throw new GitHubFailure(errors[0]?["message"]?.GetValue<string>() ?? "GitHub rejected the request.", code);
+        }
         return envelope?["data"]?.DeepClone() ?? throw new InvalidOperationException("GitHub did not return activity data.");
     }
 

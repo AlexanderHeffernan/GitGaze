@@ -42,11 +42,11 @@
   const requests = new Map();
   let serial = 0, activity;
 
-  window.gitGazeReply = ({ id, result, error }) => {
+  window.gitGazeReply = ({ id, result, error, code }) => {
     const request = requests.get(id);
     if (!request) return;
     requests.delete(id);
-    if (error) request.reject(new Error(error));
+    if (error) request.reject(Object.assign(new Error(error), { code:code || 'unknown' }));
     else request.resolve(result);
   };
   const request = (method, args) => new Promise((resolve, reject) => {

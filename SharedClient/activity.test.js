@@ -77,3 +77,21 @@ test('extension queries are scoped to a verified refresh and discard results aft
   await lateResult;
   await assert.rejects(contexts[0].query('profile'), { name: 'AbortError' });
 });
+
+test('an opt-in widget stays in the gallery until enabled and survives restart after enabling', async () => {
+  const registry = [{ id:'today' }, { id:'optional-widget', hiddenByDefault:true }];
+  let stored = { modules:['today'], hidden:[] };
+  const makeEngine = () => activity({ core, registry, onChange() {}, async request(method, args) {
+    if (method === 'readLocal') return { preferences: stored };
+    if (method === 'writePreferences') { stored = { ...stored, ...args }; return; }
+    throw new Error('offline');
+  } });
+  const first = makeEngine();
+  await first.start();
+  assert.deepEqual(first.snapshot().preferences.hidden, ['optional-widget']);
+  await first.setPreferences({ ...first.snapshot().preferences, hidden:[] });
+  assert.deepEqual(stored, { modules:['today', 'optional-widget'], hidden:[] });
+  const restarted = makeEngine();
+  await restarted.start();
+  assert.deepEqual(restarted.snapshot().preferences.hidden, []);
+});

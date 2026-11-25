@@ -91,6 +91,9 @@
       },
       async setPreferences(value) {
         const changes = Object.fromEntries(Object.entries(value).filter(([key, next]) => JSON.stringify(prefs[key]) !== JSON.stringify(next)));
+        // Persist the widget IDs seen by this installation when visibility changes so a newly
+        // enabled, hidden-by-default widget stays enabled after a restart or upgrade.
+        if ('hidden' in changes) changes.modules = value.modules;
         prefs = value;
         try { await request('writePreferences', changes); }
         catch (e) { error = e.message; publish(); }

@@ -81,7 +81,7 @@ struct FlyoutFixture: Decodable {
             Task { @MainActor in
                 let reply: [String: Any]
                 do { reply = ["id": id, "result": try await local.request(method, args: args)] }
-                catch { reply = ["id": id, "error": error.localizedDescription] }
+                catch { reply = ["id": id, "error": error.localizedDescription, "code": (error as? GitHubError)?.code ?? "unknown"] }
                 view?.callAsyncJavaScript("window.gitGazeReply(reply)", arguments: ["reply": reply], in: nil, in: .page, completionHandler: nil)
             }
         case "dismiss": close?()
@@ -123,7 +123,6 @@ struct FlyoutFixture: Decodable {
 
     private static let keys = ["modules", "hidden", "favourites", "favouriteOrder", "palette", "customLight", "customDark", "menuStyle", "menuStreak",
         "appearance", "notifications", "visualCelebrations", "celebrationStyle", "streakReminder", "reminderHour", "lastReminderDay", "detectPushes", "historyWeeks", "comparisonYear", "comparisonMode"]
-    private static let widgets = Set(["today", "streak", "heatmap", "favourites", "momentum", "records", "people", "years"])
     private static func valid(_ key: String, _ value: Any) -> Bool {
         switch key {
         case "appearance": return ["system", "light", "dark"].contains(value as? String ?? "")
@@ -132,8 +131,10 @@ struct FlyoutFixture: Decodable {
             guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID(), let hour = value as? Int else { return false }
             return (0...23).contains(hour)
         case "modules", "hidden":
-            guard let list = value as? [String] else { return false }
-            return Set(list).count == list.count && Set(list).isSubset(of: widgets)
+            guard let list = value as? [String], list.count <= 32 else { return false }
+            return Set(list).count == list.count && list.allSatisfy { id in
+                id.wholeMatch(of: /[a-z][a-z0-9-]{0,31}/) != nil
+            }
         default: return false
         }
     }
@@ -172,7 +173,7 @@ struct FlyoutFixture: Decodable {
             }
             if operation == "viewer" { token = credentials ? await Credentials.cliToken() : nil }
             guard let token else {
-                throw GitHubError.message("No GitHub CLI session found. Run gh auth login --hostname github.com, then try again.")
+                throw GitHubError.classified("No GitHub CLI session found. Run gh auth login --hostname github.com, then try again.", code: "access")
             }
             let data = try await GitHubClient(token: token).query(query, variables: values.compactMapValues { $0 as? String })
             guard let envelope = try JSONSerialization.jsonObject(with: data) as? [String: Any], let result = envelope["data"] else {
