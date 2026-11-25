@@ -34,6 +34,25 @@ For visual changes, inspect the native rendered UI in light and dark appearance,
 
 Artifacts and temporary frame captures go under `.amp/in/`, which is ignored. The review renderer is excluded from release builds. Do not run it during other app use; if interrupted, review your preferences before continuing.
 
+## Marketing site
+
+`site/` is the complete static site. No build or hosting configuration is required. To preview it from the checkout:
+
+```sh
+python3 -m http.server --directory site 8000
+```
+
+Open port 8000 on localhost. In a separate terminal, run the browser checks (Node.js and npm required):
+
+```sh
+tools=$(mktemp -d)
+npm install --prefix "$tools" playwright@1.58.2 axe-core@4.14.1
+"$tools/node_modules/.bin/playwright" install chromium webkit
+NODE_PATH="$tools/node_modules" node scripts/check-site.cjs
+```
+
+On Linux, add `--with-deps` to the Playwright install command if browser libraries are missing. The check covers responsive reflow, keyboard navigation, clipboard behaviour, no-JavaScript installation instructions, and automated accessibility in Chromium and touch-emulated WebKit. Serve the site through localhost or HTTPS for clipboard access.
+
 ## Protect private information
 
 - Never commit tokens, signing identities, `.env` files, local caches, or raw Git traces.

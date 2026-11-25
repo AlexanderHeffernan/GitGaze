@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="See today’s GitHub contributions, your streak and your history from the Mac menu bar.">
+  <meta name="theme-color" content="#101014">
+  <title>GitGaze for macOS</title>
+  <link rel="icon" href="./mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./style.css">
+  <script src="./demo.js" defer></script>
+  <script src="./install.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="wrap site-bar">
+      <a class="brand" href="./"><svg class="brand-mark" viewBox="0 0 32 32" width="30" height="30" aria-hidden="true">
+        <rect width="32" height="32" rx="9"/>
+        <circle cx="16" cy="16" r="9.4" fill="none" stroke-width="3.3" stroke-dasharray="1.45 2.24"/>
+        <path d="M16 6.6a9.4 9.4 0 1 1-8.1 14.2" fill="none" stroke-width="3.3" stroke-dasharray="1.45 2.24"/>
+        <circle cx="16" cy="16" r="2.45"/>
+      </svg>GitGaze</a>
+      <nav aria-label="Site">
+        <details class="theme" hidden>
+          <summary class="button theme-button" aria-label="Preview theme: Violet" title="Preview theme"><span aria-hidden="true"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></summary>
+          <fieldset id="palettes">
+            <legend class="visually-hidden">Preview palette</legend>
+            <div class="palette-caption" aria-hidden="true">Preview theme <strong id="palette-name">Violet</strong></div>
+            <div class="swatches"></div>
+          </fieldset>
+        </details>
+        <a class="source-button" href="https://github.com/AlexanderHeffernan/GitGaze" aria-label="GitGaze source on GitHub" title="Source on GitHub"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 .75a11.25 11.25 0 0 0-3.56 21.92c.56.1.77-.24.77-.54v-2.1c-3.13.68-3.79-1.33-3.79-1.33-.51-1.3-1.25-1.65-1.25-1.65-1.03-.7.08-.69.08-.69 1.13.08 1.72 1.16 1.72 1.16 1 1.72 2.63 1.23 3.27.94.1-.73.39-1.23.71-1.51-2.5-.28-5.13-1.25-5.13-5.56 0-1.23.44-2.23 1.16-3.02-.12-.28-.5-1.43.11-2.98 0 0 .95-.3 3.09 1.15a10.74 10.74 0 0 1 5.63 0c2.14-1.45 3.08-1.15 3.08-1.15.62 1.55.24 2.7.12 2.98.72.79 1.16 1.79 1.16 3.02 0 4.32-2.63 5.28-5.14 5.56.4.35.76 1.03.76 2.08v3.1c0 .3.2.65.78.54A11.25 11.25 0 0 0 12 .75Z"/></svg></a>
+        <a class="button nav-install" href="#install"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M4 16v4h16v-4"/></svg>Install</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap" id="main" tabindex="-1">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="label"><span></span> GitHub activity for macOS</p>
+        <h1 id="hero-title">Keep your <span>streak <em>in sight.</em></span></h1>
+        <p>Click GitGaze in your Mac’s menu bar to see today’s GitHub contributions, how close you are to a personal best, and whether a friend has pulled ahead this week.</p>
+        <a class="button primary" href="#install"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M4 16v4h16v-4"/></svg>Install GitGaze</a>
+        <p class="hero-note">Free and open source · macOS 14+</p>
+      </div>
+
+      <section class="preview" aria-label="Interactive GitGaze preview with sample contributions">
+          <div class="popover" id="popover" role="region" aria-labelledby="app-title">
+            <div class="app-head">
+              <h3 id="app-title">GitGaze</h3>
+              <span class="app-sample">Sample account</span>
+            </div>
+            <div class="app-body" tabindex="0" role="region" aria-label="Sample contribution dashboard">
+              <div id="dashboard">
+                <section class="widget">
+                  <div class="widget-top"><h4>Today</h4><span>Nov 25</span></div>
+                  <div class="today">
+                    <div class="dial"><strong data-stat="today">—</strong><span>today</span></div>
+                    <div><span class="micro">Daily best</span><div class="metric"><span data-stat="dailyBest">—</span> <small>contributions</small></div><span class="to-beat" data-stat="toBeat"></span></div>
+                  </div>
+                </section>
+                <section class="widget">
+                  <h4>Streak</h4>
+                  <div class="streak"><div class="metric"><span data-stat="streak">—</span> <small>days</small></div><div class="streak-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="best"><span data-stat="bestStreak">—</span> <small>best</small></div></div>
+                </section>
+                <section class="widget history">
+                  <div class="widget-top"><h4>Contributions</h4>
+                    <button class="glyph" id="history-toggle" type="button" aria-label="Contribution history settings" aria-expanded="false" aria-controls="history-options" hidden>
+                      <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 5h12M2 11h12M6 3v4m4 2v4"/></svg>
+                    </button>
+                  </div>
+                  <div class="metric"><span data-stat="year">—</span> <small>past year</small></div>
+                  <svg id="heatmap" role="img" aria-label="Sample contribution heatmap, one year" viewBox="0 0 320 59" preserveAspectRatio="none">
+                    <defs><pattern id="empty-cells" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="4.6" height="4.6" rx="1" fill="#303036"/></pattern></defs>
+                    <rect width="318" height="42" fill="url(#empty-cells)"/>
+                  </svg>
+                  <fieldset id="history-options" class="history-options" hidden>
+                    <legend>Visible history</legend>
+                    <label><input name="range" type="radio" value="26">6 months</label>
+                    <label><input name="range" type="radio" value="53" checked>Year</label>
+                  </fieldset>
+                </section>
+                <section class="widget friends">
+                  <div class="widget-top"><h4>Favourites</h4><span>Expand a graph to see their year</span></div>
+                  <div class="friend">
+                    <div class="friend-info"><b><i aria-hidden="true">M</i>Maya Chen</b><dl><div><dt>Today</dt><dd>16</dd></div><div><dt>Week</dt><dd>34</dd></div><div><dt>Month</dt><dd>87</dd></div><div><dt>Year</dt><dd>1,170</dd></div></dl></div>
+                    <button type="button" class="friend-toggle" aria-expanded="false" aria-controls="maya-year" aria-label="Maya Chen’s full-year contribution graph" hidden><svg class="friend-mini" viewBox="0 0 160 42" aria-hidden="true"></svg></button>
+                    <svg id="maya-year" class="friend-year" viewBox="0 0 320 59" role="img" aria-label="Maya Chen’s sample full-year contribution heatmap" hidden></svg>
+                  </div>
+                  <div class="friend">
+                    <div class="friend-info"><b><i aria-hidden="true">J</i>Jules Park</b><dl><div><dt>Today</dt><dd>9</dd></div><div><dt>Week</dt><dd>25</dd></div><div><dt>Month</dt><dd>112</dd></div><div><dt>Year</dt><dd>952</dd></div></dl></div>
+                    <button type="button" class="friend-toggle" aria-expanded="false" aria-controls="jules-year" aria-label="Jules Park’s full-year contribution graph" hidden><svg class="friend-mini" viewBox="0 0 160 42" aria-hidden="true"></svg></button>
+                    <svg id="jules-year" class="friend-year" viewBox="0 0 320 59" role="img" aria-label="Jules Park’s sample full-year contribution heatmap" hidden></svg>
+                  </div>
+                </section>
+              </div>
+            </div>
+            <div class="app-foot"><span><i></i> Updated now</span><span>@demo · <span data-stat="week">—</span> this week</span></div>
+          </div>
+      </section>
+
+    </section>
+
+    <section class="install" id="install" tabindex="-1" aria-labelledby="install-title">
+      <h2 id="install-title">Get GitGaze.</h2>
+      <fieldset class="platforms" hidden>
+        <legend class="visually-hidden">Install platform</legend>
+        <label><input type="radio" name="platform" value="mac" checked>macOS</label>
+        <label><input type="radio" name="platform" value="windows">Windows</label>
+      </fieldset>
+      <div class="installer" id="install-mac">
+        <p class="install-meta">macOS 14+ · Apple Silicon and Intel</p>
+        <div class="terminal">
+          <pre tabindex="0" aria-label="Install command"><code id="install-command">curl -fsSL https://raw.githubusercontent.com/AlexanderHeffernan/GitGaze/main/install.sh | bash</code></pre>
+          <button type="button" id="copy-install" aria-label="Copy command" title="Copy command" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><g class="copy-glyph"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></g><path class="copied-glyph" d="m5 12 4 4L19 6"/></svg></button>
+        </div>
+        <p class="copy-status" id="copy-status" role="status"></p>
+        <p>Requires <a href="https://github.com/cli/cli/blob/trunk/docs/install_macos.md#homebrew">GitHub CLI via Homebrew</a>, signed in to GitHub.</p>
+      </div>
+      <div class="installer" id="install-windows" hidden>
+        <p>GitGaze for Windows isn’t released yet.</p>
+        <a class="release-link" href="https://github.com/AlexanderHeffernan/GitGaze/releases">See GitHub releases <span aria-hidden="true">↗</span></a>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
