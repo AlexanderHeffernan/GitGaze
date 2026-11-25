@@ -8,6 +8,8 @@ const colors = {
 const preview = document.querySelector('.preview');
 const menu = preview.querySelector('.menu-item');
 const popover = document.querySelector('#popover');
+const theme = document.querySelector('.theme');
+const themeButton = theme.querySelector('summary');
 const palettes = document.querySelector('#palettes');
 const paletteName = document.querySelector('#palette-name');
 const swatches = palettes.querySelector('.swatches');
@@ -31,6 +33,17 @@ for (const [name, rgb] of Object.entries(colors)) {
   swatches.append(label);
 }
 
+theme.hidden = false;
+theme.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && theme.open) {
+    theme.open = false;
+    themeButton.focus();
+  }
+});
+document.addEventListener('click', event => {
+  if (!theme.contains(event.target)) theme.open = false;
+});
+
 function showPopover(open) {
   menu.setAttribute('aria-expanded', open);
   popover.hidden = !open;
@@ -47,8 +60,34 @@ palettes.addEventListener('change', event => {
   const name = event.target.value;
   document.documentElement.style.setProperty('--accent', `color(srgb ${colors[name]})`);
   paletteName.textContent = name;
+  themeButton.setAttribute('aria-label', `Preview theme: ${name}`);
   if (popover.hidden) showPopover(true);
 });
+
+function sampleScore(index) {
+  return ((Math.imul(index + 47, 0x45d9f3b) ^ Math.imul(index + 97, 0x119de1f3)) >>> 21) % 23;
+}
+
+// 53 columns, ending on Wednesday. The last two weeks have no missed days.
+const activity = Array.from({ length: 52 * 7 + 3 }, (_, day) => {
+  const remaining = 52 * 7 + 3 - day;
+  if (remaining <= 15) return [12, 8, 8, 18, 6, 3, 4, 10, 6, 12, 8, 4, 10, 3, 0][remaining - 1];
+  const score = sampleScore(day);
+  return score < 10 ? 0 : score - 9;
+});
+const sum = days => days.reduce((total, count) => total + count, 0);
+let streak = 0;
+let bestStreak = 0;
+for (const count of activity) {
+  streak = count ? streak + 1 : 0;
+  bestStreak = Math.max(bestStreak, streak);
+}
+const today = activity.at(-1);
+const dailyBest = Math.max(...activity);
+const stats = { today, dailyBest, streak, bestStreak, chargeStreak: `${streak}d`,
+  toBeat: `${dailyBest - today + 1} to beat it`, year: sum(activity).toLocaleString('en-US'), week: sum(activity.slice(-3)) };
+document.querySelectorAll('[data-stat]').forEach(el => { el.textContent = stats[el.dataset.stat]; });
+menu.setAttribute('aria-label', `GitGaze menu, ${today} contributions today and a ${streak}-day streak`);
 
 function drawHeatmap(weeks, target = heatmap, seed = 0, miniature = false) {
   const short = weeks === 26;
@@ -69,9 +108,10 @@ function drawHeatmap(weeks, target = heatmap, seed = 0, miniature = false) {
   for (let week = 0; week < weeks; week++) {
     for (let day = 0; day < 7; day++) {
       if (week === weeks - 1 && day > 2) continue;
-      const index = (53 - weeks + week) * 7 + day + seed;
-      const score = ((Math.imul(index + 47, 0x45d9f3b) ^ Math.imul(index + 97, 0x119de1f3)) >>> 21) % 23;
-      const level = week >= weeks - 2 ? Math.max(1, score % 5) : score < 10 ? 0 : 1 + score % 4;
+      const index = (53 - weeks + week) * 7 + day;
+      const score = sampleScore(index + seed);
+      const count = activity[index];
+      const level = target === heatmap ? Math.min(4, Math.ceil(count / 3)) : score < 10 ? 0 : 1 + score % 4;
       const cell = document.createElementNS(namespace, 'rect');
       cell.setAttribute('x', week * step);
       cell.setAttribute('y', day * row);
@@ -107,11 +147,14 @@ document.querySelectorAll('.friend-toggle').forEach((button, index) => {
     const open = button.getAttribute('aria-expanded') !== 'true';
     button.setAttribute('aria-expanded', open);
     full.toggleAttribute('hidden', !open);
-    if (open) full.scrollIntoView({ block: 'nearest' });
+    if (open) {
+      const body = full.closest('.app-body');
+      const bottom = (button.closest('.friend').nextElementSibling?.querySelector('.friend-toggle') || full).getBoundingClientRect().bottom;
+      body.scrollTop += Math.max(0, bottom - body.getBoundingClientRect().bottom + 8);
+    }
   });
 });
 
 drawHeatmap(53);
 menu.disabled = false;
 historyToggle.hidden = false;
-palettes.hidden = false;

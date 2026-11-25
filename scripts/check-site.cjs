@@ -35,11 +35,17 @@ async function main() {
     page.on('response', response => { if (!response.ok()) errors.push(`${response.status()} ${response.url()}`); });
     assert.equal((await page.goto(url)).status(), 200);
     assert.equal(await page.locator('#install-command').textContent(), command);
-    assert.equal(await page.getByRole('link', { name: 'Download ZIP' }).getAttribute('href'), archive);
+    assert.equal(await page.locator('.setup a').filter({ hasText: 'Download ZIP' }).getAttribute('href'), archive);
     const menu = page.getByRole('button', { name: /^GitGaze menu/ });
     const popover = page.locator('#popover');
     const grid = page.getByRole('img', { name: 'Sample contribution heatmap, one year' });
     await grid.waitFor();
+    const levels = chart => chart.locator('rect[data-level]').evaluateAll(cells => cells.map(cell => Number(cell.dataset.level)));
+    const yearLevels = await levels(grid);
+    assert.equal(yearLevels.at(-15), 0);
+    assert(yearLevels.slice(-14).every(level => level > 0));
+    assert.match(await menu.getAttribute('aria-label'), /12 contributions today and a 14-day streak/);
+    assert.equal(await page.locator('[data-stat="streak"]').textContent(), '14');
 
     for (const width of [320, 390, 540, 541, 768, 780, 781, 1024, 1280, 1440]) {
       await page.setViewportSize({ width, height: 900 });
@@ -67,15 +73,25 @@ async function main() {
     await page.keyboard.press('Enter');
     assert.equal(new URL(page.url()).hash, '#install');
     assert.equal(await page.locator(':focus').getAttribute('id'), 'install');
-    await page.keyboard.press('Tab'); // Homebrew link
+    await page.keyboard.press('Tab'); // Platform selector
     await page.keyboard.press('Tab');
     assert.equal(await page.locator(':focus').textContent(), 'Copy command');
     await checkCopy(page, () => page.keyboard.press('Enter'));
     assert.equal(await page.evaluate(() => navigator.clipboard.readText()), command);
+    await page.getByRole('radio', { name: 'macOS' }).press('ArrowRight');
+    assert(await page.getByRole('radio', { name: 'Windows' }).isChecked());
+    await page.getByText('GitGaze for Windows isn’t released yet.').waitFor();
+    assert.equal(await page.getByRole('button', { name: 'Copy command' }).count(), 0);
+    await page.getByRole('radio', { name: 'Windows' }).press('ArrowLeft');
+    await page.getByText('Required setup for script and ZIP', { exact: true }).click();
+    assert.equal(await page.locator('.setup li').count(), 3);
+    await page.getByRole('link', { name: 'Download ZIP' }).waitFor();
     assert.deepEqual(errors, []);
     console.log('Chromium: 10 widths, axe, skip link, visible focus, anchor, and exact keyboard clipboard copy passed');
 
     await page.reload();
+    assert.equal(await page.getByRole('radio', { name: 'Violet' }).count(), 0);
+    await page.locator('.theme-button').press('Enter');
     const violet = page.getByRole('radio', { name: 'Violet' });
     assert(await violet.isChecked());
     await violet.focus();
@@ -90,6 +106,9 @@ async function main() {
       assert.equal(await grid.locator('[data-level="4"]').first().evaluate(el => getComputedStyle(el).fill), expected);
       assert.equal(await menu.locator('.charge').evaluate(el => getComputedStyle(el, '::after').backgroundColor), expected);
     }
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('.theme[open]').count(), 0);
+    assert(await page.locator('.theme-button').evaluate(el => document.activeElement === el));
     assert.deepEqual(await popover.boundingBox().then(({ width, height }) => [width, height]), [384, 640]);
     await menu.click();
     assert.equal(await menu.getAttribute('aria-expanded'), 'false');
@@ -102,6 +121,8 @@ async function main() {
     await page.getByRole('radio', { name: '6 months' }).check();
     const shortGrid = page.getByRole('img', { name: 'Sample contribution heatmap, six months' });
     assert((await shortGrid.locator('rect').count()) < before);
+    const shortLevels = await levels(shortGrid);
+    assert.deepEqual(shortLevels, yearLevels.slice(-shortLevels.length));
     await page.getByRole('radio', { name: 'Year' }).check();
     assert.equal(await grid.locator('rect').count(), before);
     const friend = page.getByRole('button', { name: 'Maya Chen’s full-year contribution graph' });
@@ -122,7 +143,7 @@ async function main() {
     await blocked.getByRole('status').getByText('Couldn’t copy. Select the command and copy it manually.').waitFor();
     const noScript = await desktop.newPage({ javaScriptEnabled: false });
     await noScript.goto(url);
-    await noScript.getByRole('link', { name: 'Install GitGaze' }).click();
+    await noScript.getByRole('link', { name: 'Install GitGaze' }).press('Enter');
     assert.equal(new URL(noScript.url()).hash, '#install');
     assert.equal(await noScript.locator('#install-command').textContent(), command);
     assert.equal(await noScript.getByRole('button', { name: 'Copy command' }).count(), 0);
@@ -142,17 +163,26 @@ async function main() {
     await menu.tap();
     assert.equal(await menu.getAttribute('aria-expanded'), 'false');
     await menu.tap();
+    await page.locator('.theme-button').tap();
     await page.getByRole('radio', { name: 'Mint' }).tap();
     assert(await page.getByRole('radio', { name: 'Mint' }).isChecked());
+    await page.locator('.theme-button').tap();
     assert.equal(await page.locator('.streak-bars i').first().evaluate(el => getComputedStyle(el).backgroundColor), 'color(srgb 0.46 0.86 0.73)');
     await page.getByRole('button', { name: 'Contribution history settings' }).tap();
     await page.getByRole('radio', { name: '6 months' }).tap();
     await page.getByRole('img', { name: 'Sample contribution heatmap, six months' }).waitFor();
+    const maya = page.getByRole('button', { name: 'Maya Chen’s full-year contribution graph' });
+    assert((await maya.boundingBox()).height >= 44);
+    await maya.tap();
+    assert(await page.locator('.friend-toggle').last().evaluate(button => button.getBoundingClientRect().bottom <= button.closest('.app-body').getBoundingClientRect().bottom));
     await page.getByRole('button', { name: 'Jules Park’s full-year contribution graph' }).tap();
     await page.getByRole('img', { name: 'Jules Park’s sample full-year contribution heatmap' }).waitFor();
     await page.getByRole('link', { name: 'Install GitGaze' }).tap();
     assert.equal(new URL(page.url()).hash, '#install');
-    assert(await page.getByRole('radio', { name: 'Mint' }).evaluate(radio => radio.getBoundingClientRect().top >= 0 && radio.getBoundingClientRect().bottom < 110));
+    assert(await page.locator('.theme-button').evaluate(button => button.getBoundingClientRect().top >= 0 && button.getBoundingClientRect().bottom < 70));
+    await page.getByRole('radio', { name: 'Windows' }).tap();
+    await page.getByText('GitGaze for Windows isn’t released yet.').waitFor();
+    await page.getByRole('radio', { name: 'macOS' }).tap();
     await checkCopy(page, copy => copy.tap());
     console.log('WebKit iPhone 14 emulation: coarse pointer, reflow, axe, sticky palette, popover, range, friend graph, and install copy passed');
   } finally {

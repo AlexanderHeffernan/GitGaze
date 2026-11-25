@@ -16,12 +16,15 @@
   <header class="site-header">
     <div class="wrap site-bar">
       <a class="brand" href="./"><img src="./mark.svg" alt="" width="30" height="30">GitGaze</a>
-      <fieldset id="palettes" hidden>
-        <legend class="visually-hidden">Preview palette</legend>
-        <span id="palette-name" aria-hidden="true">Violet</span>
-        <div class="swatches"></div>
-      </fieldset>
       <nav aria-label="Site">
+        <details class="theme" hidden>
+          <summary class="button theme-button" aria-label="Preview theme: Violet" title="Preview theme"><span aria-hidden="true"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></summary>
+          <fieldset id="palettes">
+            <legend class="visually-hidden">Preview palette</legend>
+            <div class="palette-caption" aria-hidden="true">Preview theme <strong id="palette-name">Violet</strong></div>
+            <div class="swatches"></div>
+          </fieldset>
+        </details>
         <a class="source-button" href="https://github.com/AlexanderHeffernan/GitGaze" aria-label="GitGaze source on GitHub" title="Source on GitHub"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 .75a11.25 11.25 0 0 0-3.56 21.92c.56.1.77-.24.77-.54v-2.1c-3.13.68-3.79-1.33-3.79-1.33-.51-1.3-1.25-1.65-1.25-1.65-1.03-.7.08-.69.08-.69 1.13.08 1.72 1.16 1.72 1.16 1 1.72 2.63 1.23 3.27.94.1-.73.39-1.23.71-1.51-2.5-.28-5.13-1.25-5.13-5.56 0-1.23.44-2.23 1.16-3.02-.12-.28-.5-1.43.11-2.98 0 0 .95-.3 3.09 1.15a10.74 10.74 0 0 1 5.63 0c2.14-1.45 3.08-1.15 3.08-1.15.62 1.55.24 2.7.12 2.98.72.79 1.16 1.79 1.16 3.02 0 4.32-2.63 5.28-5.14 5.56.4.35.76 1.03.76 2.08v3.1c0 .3.2.65.78.54A11.25 11.25 0 0 0 12 .75Z"/></svg></a>
         <a class="button nav-install" href="#install"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M4 16v4h16v-4"/></svg>Install</a>
       </nav>
@@ -32,16 +35,16 @@
     <section class="hero" aria-labelledby="hero-title">
       <div class="hero-copy">
         <p class="label"><span></span> GitHub activity for macOS</p>
-        <h1 id="hero-title">Keep your streak <em>in sight.</em></h1>
-        <p>Click GitGaze in your Mac’s menu bar to see what you’ve shipped today, how close you are to a personal best, and whether a friend has pulled ahead this week.</p>
+        <h1 id="hero-title">Keep your <span>streak <em>in sight.</em></span></h1>
+        <p>Click GitGaze in your Mac’s menu bar to see today’s GitHub contributions, how close you are to a personal best, and whether a friend has pulled ahead this week.</p>
         <a class="button primary" href="#install"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M4 16v4h16v-4"/></svg>Install GitGaze</a>
         <p class="hero-note">Free and open source · macOS 14+</p>
       </div>
 
       <section class="preview" aria-label="Interactive GitGaze preview with sample contributions">
         <div class="status-anchor">
-          <button class="menu-item" type="button" aria-label="GitGaze menu, 12 contributions today and a 14-day streak" aria-expanded="true" aria-controls="popover" disabled>
-            <span class="charge" aria-hidden="true"><b>12</b><span>14d</span></span>
+          <button class="menu-item" type="button" aria-label="GitGaze menu" aria-expanded="true" aria-controls="popover" disabled>
+            <span class="charge" aria-hidden="true"><b data-stat="today">—</b><span data-stat="chargeStreak">—</span></span>
           </button>
         </div>
         <div class="demo-stage">
@@ -55,13 +58,13 @@
                 <section class="widget">
                   <div class="widget-top"><h4>Today</h4><span>Nov 25</span></div>
                   <div class="today">
-                    <div class="dial"><strong>12</strong><span>today</span></div>
-                    <div><span class="micro">Daily best</span><div class="metric">18 <small>contributions</small></div><span class="to-beat">7 to beat it</span></div>
+                    <div class="dial"><strong data-stat="today">—</strong><span>today</span></div>
+                    <div><span class="micro">Daily best</span><div class="metric"><span data-stat="dailyBest">—</span> <small>contributions</small></div><span class="to-beat" data-stat="toBeat"></span></div>
                   </div>
                 </section>
                 <section class="widget">
                   <h4>Streak</h4>
-                  <div class="streak"><div class="metric">14 <small>days</small></div><div class="streak-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="best">14 <small>best</small></div></div>
+                  <div class="streak"><div class="metric"><span data-stat="streak">—</span> <small>days</small></div><div class="streak-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="best"><span data-stat="bestStreak">—</span> <small>best</small></div></div>
                 </section>
                 <section class="widget history">
                   <div class="widget-top"><h4>Contributions</h4>
@@ -69,7 +72,7 @@
                       <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 5h12M2 11h12M6 3v4m4 2v4"/></svg>
                     </button>
                   </div>
-                  <div class="metric">1,399 <small>past year</small></div>
+                  <div class="metric"><span data-stat="year">—</span> <small>past year</small></div>
                   <svg id="heatmap" role="img" aria-label="Sample contribution heatmap, one year" viewBox="0 0 320 59" preserveAspectRatio="none">
                     <defs><pattern id="empty-cells" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="4.6" height="4.6" rx="1" fill="#303036"/></pattern></defs>
                     <rect width="318" height="42" fill="url(#empty-cells)"/>
@@ -81,7 +84,7 @@
                   </fieldset>
                 </section>
                 <section class="widget friends">
-                  <h4>Favourites</h4>
+                  <div class="widget-top"><h4>Favourites</h4><span>Expand a graph to see their year</span></div>
                   <div class="friend">
                     <div class="friend-info"><b><i aria-hidden="true">M</i>Maya Chen</b><dl><div><dt>Today</dt><dd>16</dd></div><div><dt>Week</dt><dd>34</dd></div><div><dt>Month</dt><dd>87</dd></div><div><dt>Year</dt><dd>1,170</dd></div></dl></div>
                     <button type="button" class="friend-toggle" aria-expanded="false" aria-controls="maya-year" aria-label="Maya Chen’s full-year contribution graph" hidden><svg class="friend-mini" viewBox="0 0 160 42" aria-hidden="true"></svg></button>
@@ -95,35 +98,44 @@
                 </section>
               </div>
             </div>
-            <div class="app-foot"><span><i></i> Updated now</span><span>@demo · 28 this week</span></div>
+            <div class="app-foot"><span><i></i> Updated now</span><span>@demo · <span data-stat="week">—</span> this week</span></div>
           </div>
         </div>
-        <p class="preview-note">Open the count, then click a friend’s graph to see their year.</p>
       </section>
 
     </section>
 
     <section class="install" id="install" tabindex="-1" aria-labelledby="install-title">
-      <div>
-        <h2 id="install-title">Install GitGaze</h2>
-        <p>macOS 14 or later · Apple Silicon and Intel</p>
-      </div>
-      <div class="installer">
-        <p>In Terminal, install GitHub CLI with <a href="https://brew.sh/">Homebrew</a>: <code>brew install gh</code>. Sign in with <code>gh auth login --hostname github.com</code>, then run:</p>
+      <h2 id="install-title">Get GitGaze.</h2>
+      <fieldset class="platforms" hidden>
+        <legend class="visually-hidden">Install platform</legend>
+        <label><input type="radio" name="platform" value="mac" checked><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4"/></svg>macOS</label>
+        <label><input type="radio" name="platform" value="windows"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5.5 21 3v18L3 18.5zm0 6.5h18M10 4.5v15"/></svg>Windows</label>
+      </fieldset>
+      <div class="installer" id="install-mac">
+        <p class="install-meta">macOS 14+ · Apple Silicon and Intel</p>
         <div class="terminal">
+          <div class="terminal-bar"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 6 6 6-6 6m8 0h6"/></svg>Terminal</span><button type="button" id="copy-install" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>Copy command</button></div>
           <pre><code id="install-command">curl -fsSL https://raw.githubusercontent.com/AlexanderHeffernan/GitGaze/main/install.sh | bash</code></pre>
-          <button type="button" id="copy-install" hidden>Copy command</button>
         </div>
         <p class="copy-status" id="copy-status" role="status"></p>
-        <p>The script checks the release checksum, installs in <code>~/Applications</code> without administrator access, and opens GitGaze. Look for the contribution count at the top right of your Mac’s menu bar.</p>
-        <p><a href="https://github.com/AlexanderHeffernan/GitGaze/releases/latest/download/GitGaze.zip">Download ZIP</a> instead: unzip it, move <b>GitGaze.app</b> to Applications, then open it. If macOS blocks this first launch, use <b>System Settings → Privacy &amp; Security → Open Anyway</b> only if you trust the release.</p>
-        <div class="install-links">
-          <a href="https://github.com/AlexanderHeffernan/GitGaze/blob/main/install.sh">Read the script</a>
-          <a href="https://github.com/AlexanderHeffernan/GitGaze#get-started">Setup and signing notes</a>
-        </div>
+        <p>Paste into Terminal. GitGaze opens in your menu bar, near the clock.</p>
+        <details class="setup">
+          <summary>Required setup for script and ZIP</summary>
+          <ol>
+            <li>No <code>brew</code>? Install <a href="https://brew.sh/">Homebrew</a> and follow the shell setup it prints under “Next steps.”</li>
+            <li>Install GitHub CLI with <code>brew install gh</code>.</li>
+            <li>Sign in with <code>gh auth login --hostname github.com</code>, then run the script or use the ZIP below.</li>
+          </ol>
+          <p>Prefer a manual install? <a href="https://github.com/AlexanderHeffernan/GitGaze/releases/latest/download/GitGaze.zip">Download ZIP</a>, unzip it, move <b>GitGaze.app</b> to Applications, then open it. If macOS blocks the first launch, choose <b>System Settings → Privacy &amp; Security → Open Anyway</b> only if you trust the release.</p>
+          <a href="https://github.com/AlexanderHeffernan/GitGaze/blob/main/install.sh">Read the install script</a>
+        </details>
+      </div>
+      <div class="installer" id="install-windows" hidden>
+        <p>GitGaze for Windows isn’t released yet.</p>
+        <a class="release-link" href="https://github.com/AlexanderHeffernan/GitGaze/releases">See GitHub releases <span aria-hidden="true">↗</span></a>
       </div>
     </section>
   </main>
-  <footer class="wrap site-bar site-footer"><span>No analytics or app backend.</span><a href="https://github.com/AlexanderHeffernan/GitGaze/blob/main/LICENSE">MIT license</a></footer>
 </body>
 </html>
