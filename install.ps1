@@ -9,8 +9,14 @@ New-Item -ItemType Directory -Path $stage | Out-Null
 try {
     $installer = Join-Path $stage $name
     Invoke-WebRequest -UseBasicParsing "$base/$name" -OutFile $installer
-    $sums = (Invoke-WebRequest -UseBasicParsing "$base/SHA256SUMS").Content -split "`n"
-    $expected = ($sums | Where-Object { $_ -match "^([0-9a-f]{64})\s+$([regex]::Escape($name))$" } | ForEach-Object { $Matches[1] })
+    # GitHub serves release files as application/octet-stream, which .Content returns as bytes,
+    # so the checksums are saved and read as text.
+    $sumsFile = Join-Path $stage 'SHA256SUMS'
+    Invoke-WebRequest -UseBasicParsing "$base/SHA256SUMS" -OutFile $sumsFile
+    $expected = Get-Content $sumsFile | ForEach-Object {
+        $hash, $file = $_.Trim() -split '\s+', 2
+        if ($file -eq $name -and $hash -match '^[0-9a-f]{64}$') { $hash }
+    } | Select-Object -First 1
     if (-not $expected) { throw "No checksum published for $name" }
     $actual = (Get-FileHash -Algorithm SHA256 $installer).Hash.ToLower()
     if ($actual -ne $expected) { throw "Checksum mismatch for $name" }

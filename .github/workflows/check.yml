@@ -113,6 +113,17 @@ jobs:
           GIT_CONFIG_GLOBAL="$WORK/global.cfg" GIT_TRACE2_DST_DEBUG=1 git -C "$WORK/repo" push -q "$WORK/remote.git" HEAD:main
           wait "$PID"
           grep -q "push detected" "$WORK/listener.txt"
+      - name: Install the latest release with install.ps1
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          # This commit's script against the published release, in PowerShell 7 and Windows PowerShell 5.1.
+          Get-Content ./install.ps1 -Raw | Invoke-Expression
+          if (-not (Test-Path "$env:LOCALAPPDATA\GitGaze\GitGaze.exe")) { throw 'GitGaze.exe was not installed' }
+          Get-Process GitGaze -ErrorAction SilentlyContinue | Stop-Process -Force
+          powershell -NoProfile -ExecutionPolicy Bypass -Command 'Get-Content ./install.ps1 -Raw | Invoke-Expression'
+          if ($LASTEXITCODE) { throw "Windows PowerShell install failed ($LASTEXITCODE)" }
+          Get-Process GitGaze -ErrorAction SilentlyContinue | Stop-Process -Force
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.platform }}-${{ matrix.arch || 'universal' }}
