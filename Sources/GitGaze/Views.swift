@@ -81,7 +81,7 @@ struct ModuleContent: View {
     var body: some View {
         if let stats = store.stats, let dashboard = store.dashboard {
             switch module {
-            case .today: TodayCard(stats: stats, historyLabel: store.historyLabel, historyComplete: dashboard.historyComplete)
+            case .today: TodayCard(stats: stats, historyLabel: store.historyLabel, historyComplete: dashboard.historyComplete, date: store.now)
             case .streak: StreakCard(stats: stats)
             case .heatmap: HistoryCard(profile: dashboard.profile, today: store.today)
             case .favourites: PeopleCard(store: store, favouritesOnly: true)

@@ -7,7 +7,9 @@ mkdir -p "$OUT"
 CONFIGURATION=debug "$ROOT/scripts/build.sh"
 for mode in reference shared migration; do
     rm -f "$OUT/$mode-check.txt" "$OUT/$mode-error.txt"
-    open -n -W --stderr "$OUT/$mode-error.txt" "$ROOT/.build/GitGaze.app" --args --compare-flyout "$mode" "$OUT"
+    args=(--compare-flyout "$mode" "$OUT")
+    if [[ "$mode" == reference ]]; then args+=(-palette violet -historyWeeks 53 -menuStreak NO); fi
+    open -n -W --stderr "$OUT/$mode-error.txt" "$ROOT/.build/GitGaze.app" --args "${args[@]}"
     if [[ ! -f "$OUT/$mode-check.txt" ]]; then cat "$OUT/$mode-error.txt"; exit 1; fi
     cat "$OUT/$mode-check.txt"
 done

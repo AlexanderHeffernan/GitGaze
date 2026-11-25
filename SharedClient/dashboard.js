@@ -144,6 +144,12 @@
     const section = template.querySelector('section'), tools = section.querySelector('.tools');
     section.querySelector('h2').textContent = title;
     section.dataset.widget = key;
+    if (key === 'today' && !gallery) {
+      const date = new Date(`${today}T12:00:00`);
+      const label = el('time', 'secondary', new Intl.DateTimeFormat(undefined, { month:'short', day:'numeric' }).format(date));
+      label.dateTime = today;
+      section.querySelector('.card-heading').append(label);
+    }
     const openSettings = configuring === key;
     if (gallery) tools.append(button('+', `Add ${title}`, () => change({ ...prefs, hidden:prefs.hidden.filter(id => id !== key) })));
     else if (openSettings) tools.append(button('↶ Back', `Back from ${title}`, () => flip(key, false)));

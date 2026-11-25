@@ -5,13 +5,14 @@ struct TodayCard: View {
     let stats: ContributionStats
     let historyLabel: String
     var historyComplete = true
+    var date = Date()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var body: some View {
         Card {
             HStack {
                 sectionHeading("TODAY")
                 Spacer()
-                Text(Date(), format: .dateTime.month(.abbreviated).day()).font(.system(size: 10)).foregroundStyle(.secondary)
+                Text(date, format: .dateTime.month(.abbreviated).day()).font(.system(size: 10)).foregroundStyle(.secondary)
             }
             HStack(spacing: 18) {
                 ZStack {

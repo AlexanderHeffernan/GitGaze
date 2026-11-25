@@ -69,7 +69,7 @@ final class Store: ObservableObject {
     private var celebrationTask: Task<Void, Never>?
     private var increases = ContributionIncreaseTracker()
     var changed: (() -> Void)?
-    private let defaults = UserDefaults.standard
+    private let defaults: UserDefaults
     private var token: String?
     private var refreshTask: Task<Void, Never>?
     private var timer: Timer?
@@ -147,6 +147,11 @@ final class Store: ObservableObject {
     }
 
     init() {
+        #if DEBUG
+        defaults = CommandLine.arguments.contains("--compare-flyout") ? UserDefaults(suiteName: "app.gitbar.mac.flyout-fixture")! : .standard
+        #else
+        defaults = .standard
+        #endif
         var savedModules = (defaults.stringArray(forKey: "modules") ?? []).compactMap(Module.init(rawValue:))
         for module in Module.allCases where !savedModules.contains(module) { savedModules.append(module) }
         modules = savedModules
@@ -208,7 +213,8 @@ final class Store: ObservableObject {
 
     #if DEBUG
     func loadFlyoutFixture(_ fixture: FlyoutFixture) {
-        if let date = ISO8601DateFormatter().date(from: fixture.today + "T12:00:00Z") { now = date }
+        let parser = Date.ISO8601FormatStyle(timeZone: .current).year().month().day().dateSeparator(.dash)
+        if let date = try? parser.parse(fixture.today) { now = date }
         dashboard = fixture.dashboard
     }
     #endif
