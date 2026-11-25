@@ -13,33 +13,33 @@
 </head>
 <body>
   <a class="skip" href="#main">Skip to content</a>
-  <header class="wrap site-bar">
-    <a class="brand" href="./"><img src="./mark.svg" alt="" width="24" height="24">GitGaze</a>
-    <nav aria-label="Site"><a href="https://github.com/AlexanderHeffernan/GitGaze">Source <span aria-hidden="true">↗</span></a><a href="#install">Install <span aria-hidden="true">↓</span></a></nav>
+  <header class="site-header">
+    <div class="wrap site-bar">
+      <a class="brand" href="./"><img src="./mark.svg" alt="" width="30" height="30">GitGaze</a>
+      <fieldset id="palettes" hidden>
+        <legend class="visually-hidden">Preview palette</legend>
+        <span id="palette-name" aria-hidden="true">Violet</span>
+        <div class="swatches"></div>
+      </fieldset>
+      <nav aria-label="Site">
+        <a class="source-button" href="https://github.com/AlexanderHeffernan/GitGaze" aria-label="GitGaze source on GitHub" title="Source on GitHub"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 .75a11.25 11.25 0 0 0-3.56 21.92c.56.1.77-.24.77-.54v-2.1c-3.13.68-3.79-1.33-3.79-1.33-.51-1.3-1.25-1.65-1.25-1.65-1.03-.7.08-.69.08-.69 1.13.08 1.72 1.16 1.72 1.16 1 1.72 2.63 1.23 3.27.94.1-.73.39-1.23.71-1.51-2.5-.28-5.13-1.25-5.13-5.56 0-1.23.44-2.23 1.16-3.02-.12-.28-.5-1.43.11-2.98 0 0 .95-.3 3.09 1.15a10.74 10.74 0 0 1 5.63 0c2.14-1.45 3.08-1.15 3.08-1.15.62 1.55.24 2.7.12 2.98.72.79 1.16 1.79 1.16 3.02 0 4.32-2.63 5.28-5.14 5.56.4.35.76 1.03.76 2.08v3.1c0 .3.2.65.78.54A11.25 11.25 0 0 0 12 .75Z"/></svg></a>
+        <a class="button nav-install" href="#install"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M4 16v4h16v-4"/></svg>Install</a>
+      </nav>
+    </div>
   </header>
 
   <main class="wrap" id="main" tabindex="-1">
     <section class="hero" aria-labelledby="hero-title">
       <div class="hero-copy">
-        <p class="label">GitGaze for macOS</p>
-        <h1 id="hero-title">GitHub activity in your menu bar.</h1>
-        <p>The menu-bar item shows today’s count. Open it to see your streak, daily best and contribution history.</p>
-        <p>GitGaze also counts other GitHub activity besides commits, including private contributions your account can see.</p>
-        <a class="primary" href="#install">Install GitGaze <span aria-hidden="true">↓</span></a>
+        <p class="label"><span></span> GitHub activity for macOS</p>
+        <h1 id="hero-title">Keep your streak <em>in sight.</em></h1>
+        <p>Click GitGaze in your Mac’s menu bar to see what you’ve shipped today, how close you are to a personal best, and whether a friend has pulled ahead this week.</p>
+        <a class="button primary" href="#install"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M4 16v4h16v-4"/></svg>Install GitGaze</a>
+        <p class="hero-note">Free and open source · macOS 14+</p>
       </div>
 
-      <div class="demo-controls" hidden>
-        <fieldset id="palettes">
-          <legend>Preview palette <span id="palette-name" aria-hidden="true">Violet</span></legend>
-          <div class="swatches"></div>
-        </fieldset>
-        <p>Click the menu-bar count to close or open the popover. Use the sliders next to Contributions to switch to six months.</p>
-      </div>
-
-      <section class="preview" aria-labelledby="demo-title">
-        <div class="demo-caption"><h2 id="demo-title">Menu bar demo</h2><span>Sample data</span></div>
-        <div class="menu-strip">
-          <span class="menu-hint" aria-hidden="true">Menu bar</span>
+      <section class="preview" aria-label="Interactive GitGaze preview with sample contributions">
+        <div class="status-anchor">
           <button class="menu-item" type="button" aria-label="GitGaze menu, 12 contributions today and a 14-day streak" aria-expanded="true" aria-controls="popover" disabled>
             <span class="charge" aria-hidden="true"><b>12</b><span>14d</span></span>
           </button>
@@ -48,9 +48,7 @@
           <div class="popover" id="popover" role="region" aria-labelledby="app-title">
             <div class="app-head">
               <h3 id="app-title">GitGaze</h3>
-              <button class="glyph" id="layout-toggle" type="button" aria-label="Add widgets" aria-expanded="false" aria-controls="widget-picker" hidden>
-                <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg>
-              </button>
+              <span class="app-sample">Sample account</span>
             </div>
             <div class="app-body">
               <div id="dashboard">
@@ -82,22 +80,25 @@
                     <label><input name="range" type="radio" value="53" checked>Year</label>
                   </fieldset>
                 </section>
-                <section class="widget momentum" id="momentum">
-                  <h4>This week</h4>
-                  <div class="week-total"><div class="metric">28 <small>contributions</small></div><small>53 last week</small></div>
-                  <div class="week-chart" role="img" aria-label="Sample week: 8, 8 and 12 contributions from Monday to Wednesday; no contributions yet for Thursday through Sunday">
-                    <span style="--n:8"><i>8</i>M</span><span style="--n:8"><i>8</i>T</span><span style="--n:12"><i>12</i>W</span><span><i>0</i>T</span><span><i>0</i>F</span><span><i>0</i>S</span><span><i>0</i>S</span>
+                <section class="widget friends">
+                  <h4>Favourites</h4>
+                  <div class="friend">
+                    <div class="friend-info"><b><i aria-hidden="true">M</i>Maya Chen</b><dl><div><dt>Today</dt><dd>16</dd></div><div><dt>Week</dt><dd>34</dd></div><div><dt>Month</dt><dd>87</dd></div><div><dt>Year</dt><dd>1,170</dd></div></dl></div>
+                    <button type="button" class="friend-toggle" aria-expanded="false" aria-controls="maya-year" aria-label="Maya Chen’s full-year contribution graph" hidden><svg class="friend-mini" viewBox="0 0 160 42" aria-hidden="true"></svg></button>
+                    <svg id="maya-year" class="friend-year" viewBox="0 0 320 59" role="img" aria-label="Maya Chen’s sample full-year contribution heatmap" hidden></svg>
+                  </div>
+                  <div class="friend">
+                    <div class="friend-info"><b><i aria-hidden="true">J</i>Jules Park</b><dl><div><dt>Today</dt><dd>9</dd></div><div><dt>Week</dt><dd>25</dd></div><div><dt>Month</dt><dd>112</dd></div><div><dt>Year</dt><dd>952</dd></div></dl></div>
+                    <button type="button" class="friend-toggle" aria-expanded="false" aria-controls="jules-year" aria-label="Jules Park’s full-year contribution graph" hidden><svg class="friend-mini" viewBox="0 0 160 42" aria-hidden="true"></svg></button>
+                    <svg id="jules-year" class="friend-year" viewBox="0 0 320 59" role="img" aria-label="Jules Park’s sample full-year contribution heatmap" hidden></svg>
                   </div>
                 </section>
               </div>
-              <div class="widget-picker" id="widget-picker" hidden>
-                <p>Add or remove a widget from this demo.</p>
-                <label class="picker-row"><span><b>Weekly momentum</b><small>Activity by day this week</small></span><input type="checkbox" id="show-momentum" checked></label>
-              </div>
             </div>
-            <div class="app-foot"><span><i></i> Updated now</span><span>@demo</span></div>
+            <div class="app-foot"><span><i></i> Updated now</span><span>@demo · 28 this week</span></div>
           </div>
         </div>
+        <p class="preview-note">Open the count, then click a friend’s graph to see their year.</p>
       </section>
 
     </section>

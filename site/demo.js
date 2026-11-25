@@ -45,19 +45,19 @@ preview.addEventListener('keydown', event => {
 });
 palettes.addEventListener('change', event => {
   const name = event.target.value;
-  preview.style.setProperty('--accent', `color(srgb ${colors[name]})`);
+  document.documentElement.style.setProperty('--accent', `color(srgb ${colors[name]})`);
   paletteName.textContent = name;
   if (popover.hidden) showPopover(true);
 });
 
-function drawHeatmap(weeks) {
+function drawHeatmap(weeks, target = heatmap, seed = 0, miniature = false) {
   const short = weeks === 26;
   const namespace = 'http://www.w3.org/2000/svg';
   const cells = document.createDocumentFragment();
-  const step = short ? 12.2 : 6;
-  const size = short ? 9 : 4.6;
-  const row = short ? 10.6 : 6.1;
-  [short ? '2026-06' : '2025-11', 'Today'].forEach((label, i) => {
+  const step = short && !miniature ? 12.2 : 6;
+  const size = short && !miniature ? 9 : 4.6;
+  const row = short && !miniature ? 10.6 : 6.1;
+  if (!miniature) [short ? '2026-06' : '2025-11', 'Today'].forEach((label, i) => {
     const text = document.createElementNS(namespace, 'text');
     text.setAttribute('x', i ? 319 : 0);
     text.setAttribute('text-anchor', i ? 'end' : 'start');
@@ -69,7 +69,7 @@ function drawHeatmap(weeks) {
   for (let week = 0; week < weeks; week++) {
     for (let day = 0; day < 7; day++) {
       if (week === weeks - 1 && day > 2) continue;
-      const index = (53 - weeks + week) * 7 + day;
+      const index = (53 - weeks + week) * 7 + day + seed;
       const score = ((Math.imul(index + 47, 0x45d9f3b) ^ Math.imul(index + 97, 0x119de1f3)) >>> 21) % 23;
       const level = week >= weeks - 2 ? Math.max(1, score % 5) : score < 10 ? 0 : 1 + score % 4;
       const cell = document.createElementNS(namespace, 'rect');
@@ -82,10 +82,12 @@ function drawHeatmap(weeks) {
       cells.append(cell);
     }
   }
-  heatmap.setAttribute('viewBox', `0 0 320 ${short ? 88 : 59}`);
-  heatmap.setAttribute('aria-label', `Sample contribution heatmap, ${short ? 'six months' : 'one year'}`);
-  heatmap.classList.toggle('six-months', short);
-  heatmap.replaceChildren(cells);
+  if (target === heatmap) {
+    heatmap.setAttribute('viewBox', `0 0 320 ${short ? 88 : 59}`);
+    heatmap.setAttribute('aria-label', `Sample contribution heatmap, ${short ? 'six months' : 'one year'}`);
+    heatmap.classList.toggle('six-months', short);
+  }
+  target.replaceChildren(cells);
 }
 
 const historyToggle = document.querySelector('#history-toggle');
@@ -95,25 +97,21 @@ historyToggle.addEventListener('click', () => {
 });
 history.addEventListener('change', event => drawHeatmap(Number(event.target.value)));
 
-const layoutToggle = document.querySelector('#layout-toggle');
-const picker = document.querySelector('#widget-picker');
-const dashboard = document.querySelector('#dashboard');
-const appTitle = document.querySelector('#app-title');
-layoutToggle.addEventListener('click', () => {
-  const picking = picker.hidden;
-  picker.hidden = !picking;
-  dashboard.hidden = picking;
-  layoutToggle.setAttribute('aria-expanded', picking);
-  layoutToggle.setAttribute('aria-label', picking ? 'Back to dashboard' : 'Add widgets');
-  layoutToggle.querySelector('path').setAttribute('d', picking ? 'M12 8H4m4-4L4 8l4 4' : 'M8 3v10M3 8h10');
-  appTitle.textContent = picking ? 'Add widgets' : 'GitGaze';
-});
-document.querySelector('#show-momentum').addEventListener('change', event => {
-  document.querySelector('#momentum').hidden = !event.target.checked;
+document.querySelectorAll('.friend-toggle').forEach((button, index) => {
+  const full = document.getElementById(button.getAttribute('aria-controls'));
+  const seed = 501 * (index + 1);
+  drawHeatmap(26, button.querySelector('svg'), seed, true);
+  drawHeatmap(53, full, seed);
+  button.hidden = false;
+  button.addEventListener('click', () => {
+    const open = button.getAttribute('aria-expanded') !== 'true';
+    button.setAttribute('aria-expanded', open);
+    full.toggleAttribute('hidden', !open);
+    if (open) full.scrollIntoView({ block: 'nearest' });
+  });
 });
 
 drawHeatmap(53);
 menu.disabled = false;
 historyToggle.hidden = false;
-layoutToggle.hidden = false;
-document.querySelector('.demo-controls').hidden = false;
+palettes.hidden = false;

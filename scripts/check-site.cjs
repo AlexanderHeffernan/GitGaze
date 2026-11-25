@@ -104,14 +104,17 @@ async function main() {
     assert((await shortGrid.locator('rect').count()) < before);
     await page.getByRole('radio', { name: 'Year' }).check();
     assert.equal(await grid.locator('rect').count(), before);
-    await page.getByRole('button', { name: 'Add widgets' }).click();
-    await page.getByRole('checkbox', { name: /Weekly momentum/ }).uncheck();
-    await page.getByRole('button', { name: 'Back to dashboard' }).click();
-    assert.equal(await page.getByRole('heading', { name: 'This week' }).count(), 0);
+    const friend = page.getByRole('button', { name: 'Maya Chen’s full-year contribution graph' });
+    await friend.press('Enter');
+    assert.equal(await friend.getAttribute('aria-expanded'), 'true');
+    assert(await page.getByRole('img', { name: 'Maya Chen’s sample full-year contribution heatmap' }).isVisible());
+    assert.equal(await page.getByRole('img', { name: 'Jules Park’s sample full-year contribution heatmap' }).count(), 0);
+    await friend.press('Enter');
+    assert.equal(await friend.getAttribute('aria-expanded'), 'false');
     await page.keyboard.press('Escape');
     assert.equal(await menu.getAttribute('aria-expanded'), 'false');
     assert(await menu.evaluate(el => document.activeElement === el));
-    console.log('Chromium: 10 exact native palette colors, radio focus and arrows, popover, reduced motion, history range and widget visibility passed');
+    console.log('Chromium: 10 exact native palette colors, radio focus and arrows, popover, reduced motion, history range and friend graph passed');
 
     const blocked = await desktop.newPage({ permissions: ['clipboard-read'] });
     await blocked.goto(url);
@@ -134,7 +137,7 @@ async function main() {
     await page.goto(url);
     assert(await page.evaluate(() => matchMedia('(pointer: coarse)').matches && document.documentElement.scrollWidth === innerWidth));
     await audit(page, 'Mobile axe violations');
-    assert(await page.locator('.week-chart').evaluate(chart => chart.getBoundingClientRect().bottom <= chart.closest('.app-body').getBoundingClientRect().bottom));
+    assert(await page.locator('.friend').last().evaluate(row => row.getBoundingClientRect().bottom <= row.closest('.app-body').getBoundingClientRect().bottom));
     const menu = page.getByRole('button', { name: /^GitGaze menu/ });
     await menu.tap();
     assert.equal(await menu.getAttribute('aria-expanded'), 'false');
@@ -145,10 +148,13 @@ async function main() {
     await page.getByRole('button', { name: 'Contribution history settings' }).tap();
     await page.getByRole('radio', { name: '6 months' }).tap();
     await page.getByRole('img', { name: 'Sample contribution heatmap, six months' }).waitFor();
+    await page.getByRole('button', { name: 'Jules Park’s full-year contribution graph' }).tap();
+    await page.getByRole('img', { name: 'Jules Park’s sample full-year contribution heatmap' }).waitFor();
     await page.getByRole('link', { name: 'Install GitGaze' }).tap();
     assert.equal(new URL(page.url()).hash, '#install');
+    assert(await page.getByRole('radio', { name: 'Mint' }).evaluate(radio => radio.getBoundingClientRect().top >= 0 && radio.getBoundingClientRect().bottom < 110));
     await checkCopy(page, copy => copy.tap());
-    console.log('WebKit iPhone 14 emulation: coarse pointer, reflow, axe, touch popover, palette, range, and install copy passed');
+    console.log('WebKit iPhone 14 emulation: coarse pointer, reflow, axe, sticky palette, popover, range, friend graph, and install copy passed');
   } finally {
     await mobile.close();
   }
