@@ -78,6 +78,7 @@ struct DashboardView: View {
 struct ModuleContent: View {
     let module: Module
     @ObservedObject var store: Store
+    var preview = false
     var body: some View {
         if let stats = store.stats, let dashboard = store.dashboard {
             switch module {
@@ -89,6 +90,7 @@ struct ModuleContent: View {
             case .momentum: MomentumCard(stats: stats, today: store.today)
             case .records: RecordsCard(stats: stats)
             case .years: YearComparisonCard(store: store)
+            case .leaderboard: OrganizationLeaderboardCard(leaderboard: store.leaderboard, preview: preview)
             }
         }
     }
@@ -108,7 +110,7 @@ struct WidgetGallery: View {
                             Spacer()
                             Image(systemName: "plus.circle.fill").font(.system(size: 17)).foregroundStyle(Theme.accent)
                         }.padding(.top, 14)
-                        ModuleContent(module: module, store: store)
+                        ModuleContent(module: module, store: store, preview: true)
                             .fixedSize(horizontal: false, vertical: true).frame(maxHeight: 205, alignment: .top).clipped()
                             .allowsHitTesting(false).accessibilityHidden(true)
                     }.padding(.horizontal, 14).padding(.bottom, 4)
@@ -128,7 +130,7 @@ struct WidgetShell: View {
     let configure: () -> Void
     @State private var hovered = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private var configurable: Bool { [.favourites, .people, .streak, .heatmap, .years].contains(module) }
+    private var configurable: Bool { [.favourites, .people, .streak, .heatmap, .years, .leaderboard].contains(module) }
     var body: some View {
         FlippingWidget(flipped: configuring) {
             ModuleContent(module: module, store: store).overlay(alignment: .topTrailing) {
@@ -161,6 +163,7 @@ struct WidgetShell: View {
                     }
                 case .heatmap: HistoryOptions()
                 case .years: YearComparisonOptions(store: store)
+                case .leaderboard: OrganizationLeaderboardSettings(leaderboard: store.leaderboard)
                 default: EmptyView()
                 }
             }.font(.system(size: 11)).toggleStyle(TrailingSwitchStyle()).controlSize(.small)

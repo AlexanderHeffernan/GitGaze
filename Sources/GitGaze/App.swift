@@ -63,6 +63,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             NSApp.terminate(nil)
             return
         }
+        #if DEBUG
+        if let index = CommandLine.arguments.firstIndex(of: "--review-leaderboard") {
+            reviewLeaderboard(mode: CommandLine.arguments.dropFirst(index + 1).first ?? "gallery")
+            showPopover()
+            return
+        }
+        #endif
         if !CommandLine.arguments.contains("--review") { store.updates.start() }
         Task {
             if CommandLine.arguments.contains("--enable-push-detection") { store.enablePushDetection(true) }

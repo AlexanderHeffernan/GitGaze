@@ -12,8 +12,9 @@ Built with SwiftUI and AppKit, with [Sparkle](https://sparkle-project.org/) for 
 ## Features
 
 - **Six menu-bar styles.** A record dial, charge capsule, activity waveform, contribution mosaic, faceted prism, or activity ribbon. Each shows today's count, with an optional streak.
-- **A dashboard you arrange.** Add, remove, and reorder eight widgets: Today, Your streak, Contribution history, Favourite people, Weekly momentum, Personal bests, People you follow, and Year in perspective. Widget settings flip into place.
+- **A dashboard you arrange.** Add, remove, and reorder nine widgets, including Today, Favourite people, Year in perspective, and Organization leaderboard. Widget settings flip into place.
 - **Your people, at a glance.** Order favourites, see their daily/weekly/monthly/yearly contributions, and expand their graphs with a click.
+- **Your place in an organization.** Add Organization leaderboard and choose one of the organizations visible to your CLI session in the widget’s settings. See your rank even when you’re outside the top five.
 - **Compare your years.** Compare cumulative contributions with a previous year, either to the same calendar date or the full year's total.
 - **Celebrations that mean something.** Fireworks, Supernova, and Meteor shower particles form the actual contribution increase. Celebrations happen only after GitHub confirms new activity—not just because a push succeeded.
 - **Make it yours.** Ten palettes, custom light/dark accent colours, and automatic, light, or dark appearance. Respects Reduce Motion.
@@ -63,6 +64,8 @@ GitGaze reads your existing CLI session automatically. It **does not log you int
 ## How contributions are counted
 
 GitHub's GraphQL `contributionCalendar` is the source of truth. GitGaze doesn't sum push events, read local repositories, or scrape profile pages. Private activity is subject to GitHub's visibility and organisation policies; restricted counts are not added to the calendar a second time.
+
+The organization leaderboard uses GitHub’s organization-filtered counts for commits, opened issues, opened pull requests, and submitted pull request reviews over the last 30 days. It ranks only members visible to your CLI session, excludes anonymous restricted counts, and does not estimate hidden activity. Equal counts share a rank. GitGaze does not show a partial ranking when a roster can’t be fetched or has more than 500 visible members. Membership and activity visibility depend on the CLI token’s permissions and the organization’s policies, including SSO.
 
 “Today” selects the current Mac calendar date from GitHub's existing date buckets. Historical contributions are not shifted into your local timezone. **Exact parity with the website is not guaranteed:** authenticated API calendars and web-profile graphs can differ in totals or day assignments. GitGaze preserves the supported API result rather than inventing adjustments. GitHub may also take time to process new contributions.
 

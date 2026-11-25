@@ -5,7 +5,7 @@ import ServiceManagement
 import UserNotifications
 
 enum Module: String, Codable, CaseIterable, Identifiable {
-    case today, streak, heatmap, favourites, momentum, records, people, years
+    case today, streak, heatmap, favourites, momentum, records, people, years, leaderboard
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -17,6 +17,7 @@ enum Module: String, Codable, CaseIterable, Identifiable {
         case .records: "Personal bests"
         case .people: "People you follow"
         case .years: "Year in perspective"
+        case .leaderboard: "Organization leaderboard"
         }
     }
     var symbol: String {
@@ -29,6 +30,7 @@ enum Module: String, Codable, CaseIterable, Identifiable {
         case .records: "trophy"
         case .people: "person.2"
         case .years: "chart.xyaxis.line"
+        case .leaderboard: "person.3"
         }
     }
 }
@@ -43,7 +45,15 @@ final class Store: ObservableObject {
     @Published var peopleError: String?
     @Published var settings = false
     @Published var modules: [Module] { didSet { persistPreferences() } }
-    @Published var hidden: Set<String> { didSet { persistPreferences() } }
+    @Published var hidden: Set<String> {
+        didSet {
+            persistPreferences()
+            let wasHidden = oldValue.contains(Module.leaderboard.rawValue)
+            let isHidden = hidden.contains(Module.leaderboard.rawValue)
+            if wasHidden && !isHidden { leaderboard.load() }
+            if !wasHidden && isHidden { leaderboard.cancel() }
+        }
+    }
     @Published var favourites: Set<String> { didSet { persistPreferences(); orderPeople() } }
     @Published var favouriteOrder: [String] { didSet { defaults.set(favouriteOrder, forKey: "favouriteOrder"); orderPeople() } }
     @Published var palette: String { didSet { defaults.set(palette, forKey: "palette"); changed?() } }
@@ -64,12 +74,14 @@ final class Store: ObservableObject {
     @Published private(set) var detectPushes: Bool
     @Published private(set) var lastDetectedPush: Date?
     let updates = AppUpdates()
+    private(set) lazy var leaderboard = OrganizationLeaderboard(defaults: defaults)
     private let pushMonitor = PushMonitor()
     private var activityTask: Task<Void, Never>?
     private var celebrationTask: Task<Void, Never>?
     private var increases = ContributionIncreaseTracker()
     var changed: (() -> Void)?
-    private let defaults = UserDefaults.standard
+    private let defaults: UserDefaults
+    private let reviewingLeaderboard: Bool
     private var token: String?
     private var refreshTask: Task<Void, Never>?
     private var timer: Timer?
@@ -147,11 +159,19 @@ final class Store: ObservableObject {
     }
 
     init() {
+        #if DEBUG
+        reviewingLeaderboard = CommandLine.arguments.contains("--review-leaderboard")
+        defaults = reviewingLeaderboard ? UserDefaults(suiteName: "app.gitbar.mac.leaderboard-review")! : .standard
+        #else
+        reviewingLeaderboard = false
+        defaults = .standard
+        #endif
         var savedModules = (defaults.stringArray(forKey: "modules") ?? []).compactMap(Module.init(rawValue:))
         for module in Module.allCases where !savedModules.contains(module) { savedModules.append(module) }
         modules = savedModules
         var savedHidden = Set(defaults.stringArray(forKey: "hidden") ?? ["momentum", "records", "people", "years"])
         if !(defaults.stringArray(forKey: "modules") ?? []).contains("years") { savedHidden.insert("years") }
+        if !(defaults.stringArray(forKey: "modules") ?? []).contains(Module.leaderboard.rawValue) { savedHidden.insert(Module.leaderboard.rawValue) }
         hidden = savedHidden
         favourites = Set(defaults.stringArray(forKey: "favourites") ?? [])
         favouriteOrder = defaults.stringArray(forKey: "favouriteOrder") ?? []
@@ -167,7 +187,7 @@ final class Store: ObservableObject {
         reminderHour = defaults.object(forKey: "reminderHour") as? Int ?? 18
         detectPushes = defaults.bool(forKey: "detectPushes")
         // Launch validation must never read credentials/cache or touch the user's Git integration.
-        if CommandLine.arguments.contains("--smoke-test") { return }
+        if reviewingLeaderboard || CommandLine.arguments.contains("--smoke-test") { return }
         if let data = try? Data(contentsOf: cacheURL) {
             dashboard = try? JSONDecoder().decode(Dashboard.self, from: data)
         }
@@ -210,7 +230,8 @@ final class Store: ObservableObject {
 
     func refresh(force: Bool = false) {
         tick()
-        guard !loading else { return }
+        if !hidden.contains(Module.leaderboard.rawValue) { leaderboard.load(force: force) }
+        guard !reviewingLeaderboard, !loading else { return }
         if token == nil { refreshTask = Task { await useCLI() }; return }
         if !force, let date = dashboard?.updatedAt, Date().timeIntervalSince(date) < 30 { return }
         refreshTask = Task { await refreshNow() }
@@ -344,9 +365,12 @@ final class Store: ObservableObject {
         defer { if generation == session { loading = false } }
         do {
             // Validate the CLI identity before displaying another account's cache.
-            let profile = try await GitHubClient(token: token).viewer()
+            let client = GitHubClient(token: token)
+            let profile = try await client.viewer()
             guard generation == session, !Task.isCancelled else { return }
             self.token = token
+            leaderboard.connect(login: profile.person.login, discover: client.organizations, standings: client.organizationStandings)
+            if !hidden.contains(Module.leaderboard.rawValue) { leaderboard.load() }
             if dashboard?.profile.person.login != profile.person.login {
                 session = UUID()
                 dashboard = nil

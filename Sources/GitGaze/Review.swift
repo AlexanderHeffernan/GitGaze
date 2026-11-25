@@ -4,6 +4,43 @@ import SwiftUI
 import GitGazeCore
 
 extension AppDelegate {
+    /// Runs the real widget gallery, popover and settings without CLI credentials or GitHub requests.
+    func reviewLeaderboard(mode: String) {
+        let decoder = JSONDecoder()
+        let login = "gitgaze-fixture-viewer"
+        let profile = try! decoder.decode(Profile.self, from: Data("""
+            {"person":{"login":"\(login)","avatarUrl":""},"days":[],"years":[],"totalContributions":0,"restrictedCount":0}
+            """.utf8))
+        let organizations = try! decoder.decode([GitHubOrganization].self, from: Data("""
+            [{"id":"northstar-fixture","login":"northstar-labs"},{"id":"tideline-fixture","login":"tideline-studio"}]
+            """.utf8))
+        func row(_ handle: String, _ name: String, _ count: Int, _ rank: Int) -> OrganizationStanding {
+            let person = try! decoder.decode(Person.self, from: Data("""
+                {"login":"\(handle)","name":"\(name)","avatarUrl":""}
+                """.utf8))
+            return OrganizationStanding(person: person, count: count, rank: rank)
+        }
+        let ranked = [row("amira", "Amira Chen", 72, 1), row("ben", "Ben Rivers", 56, 2),
+                      row("cora", "Cora Walsh", 56, 2), row("dev", "Dev Patel", 38, 4),
+                      row("eli", "Eli Morgan", 29, 5), row("flo", "Florence Park", 24, 6),
+                      row(login, "Jamie Reed", 19, 7), row("haru", "Haru Lee", 8, 8)]
+        let quiet = [row("amira", "Amira Chen", 0, 1), row(login, "Jamie Reed", 0, 1)]
+        store.dashboard = Dashboard(profile: profile, history: [], historyComplete: true,
+                                    following: [], people: [:], updatedAt: Date())
+        store.modules = [.leaderboard, .today] + Module.allCases.filter { $0 != .leaderboard && $0 != .today }
+        store.hidden = mode == "gallery" ? [Module.leaderboard.rawValue] : Set(Module.allCases.filter { $0 != .leaderboard }.map(\.rawValue))
+        store.appearance = "dark"
+        store.leaderboard.connect(login: login, discover: {
+            mode == "empty" ? [] : organizations
+        }, standings: { organization in
+            try await Task.sleep(for: .milliseconds(mode == "loading" ? 30_000 : 550))
+            if mode == "error" { throw GitHubError.message("GitHub didn't return the full visible member list. Try again.") }
+            if mode == "missing" { return Array(ranked.prefix(6)) + [row("haru", "Haru Lee", 8, 7)] }
+            return organization.id == "tideline-fixture" ? quiet : ranked
+        })
+        if mode != "gallery" { store.leaderboard.load() }
+    }
+
     func review(in directory: String) async {
         let path = { (name: String) in directory + "/" + name + ".png" }
         let appearance = store.appearance, palette = store.palette
