@@ -15,17 +15,22 @@ button:focus-visible, select:focus-visible { outline:2px solid var(--accent); ou
 nav button:has(.action-icon) { width:24px; height:24px; display:grid; place-items:center; padding:0; }
 .action-icon { width:16px; height:16px; }
 main { overflow:auto; padding:5px 22px 12px; scrollbar-width:thin; }
-section { padding:11px 12px 13px; border-bottom:1px solid var(--edge); }
+section { padding:9px 0 10px; border-bottom:1px solid var(--edge); }
 h2 { font-size:10px; text-transform:uppercase; letter-spacing:1.1px; margin:0; color:var(--muted); font-weight:650; }
 .tools { opacity:0; }
 section:hover .tools, section:focus-within .tools, .tools.active { opacity:1; }
-.hero { display:flex; align-items:center; gap:20px; padding-top:4px; }
+.hero { display:flex; align-items:center; gap:18px; padding-top:4px; }
 .dial { display:grid; place-items:center; width:112px; height:112px; flex:none; }
 .dial > * { grid-area:1/1; }
 .dial svg { width:100%; }
-.number { font-size:40px; font-weight:640; letter-spacing:-2px; line-height:1; font-variant-numeric:tabular-nums; }
+.number { font-size:40px; font-weight:500; letter-spacing:-2px; line-height:1; font-variant-numeric:tabular-nums; }
 .number.compact { font-size:32px; }
 .center { text-align:center; }
+.center .secondary, .daily-best .secondary { font-size:9px; }
+.daily-best .split { justify-content:flex-start; align-items:baseline; gap:5px; }
+.daily-best .large { font-size:25px; font-weight:500; }
+.daily-best-label { color:var(--muted); font-size:8px; font-weight:600; letter-spacing:1.2px; margin-bottom:4px; }
+.daily-best .metric { margin-top:13px; font-weight:500; }
 .large { font-size:27px; font-weight:620; letter-spacing:-.8px; }
 .secondary { color:var(--muted); font-size:10px; }
 .metric { color:var(--accent); font-size:11px; margin-top:8px; }
@@ -68,7 +73,7 @@ section:hover .tools, section:focus-within .tools, .tools.active { opacity:1; }
 select { color:inherit; background:var(--bg); border:1px solid var(--edge); border-radius:5px; padding:4px; }
 footer { min-height:28px; padding:4px 22px; border-top:1px solid var(--edge); color:var(--muted); font-size:10px; }
 #status::before { content:'●'; color:var(--accent); padding-right:6px; }
-.gallery section { border:1px solid var(--edge); border-radius:11px; margin-top:10px; }
+.gallery section { border:1px solid var(--edge); border-radius:11px; margin-top:10px; padding-inline:12px; }
 .face p { margin:6px 0; }
 .leaderboard, .leaderboard-status { display:grid; gap:7px; }
 .leaderboard-status:empty { display:none; }

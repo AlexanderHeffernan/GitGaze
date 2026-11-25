@@ -91,14 +91,16 @@
       chart.append(svg('rect', { x:54.5, y:1, width:3, height:8, rx:1.5, transform:`rotate(${i * 9} 56 56)`,
         fill:i < lit ? (stats.isRecord ? 'var(--gold)' : 'var(--accent)') : 'currentColor', opacity:i < lit ? 1 : .16 }));
     }
-    const count = group('center', text(num(stats.todayCount), stats.todayCount > 99 ? 'number compact' : 'number'), text('today'));
+    const count = group('center', text(num(stats.todayCount), stats.todayCount > 99 ? 'number compact' : 'number'), text('today', 'secondary'));
     count.setAttribute('aria-hidden', 'true');
     const dial = group('dial', chart, count);
     dial.setAttribute('role', 'img');
     dial.setAttribute('aria-label', `${num(stats.todayCount)} contributions today. ${Math.trunc(stats.progress * 100)} percent of your next daily record.`);
     const progress = stats.isRecord ? `↗ +${stats.todayCount - stats.previousBest} above previous` : `${stats.target - stats.todayCount} to beat it`;
-    return group('hero', dial, group('', text(stats.isRecord ? 'NEW DAILY BEST' : 'DAILY BEST'), group('split', text(num(stats.bestDay), 'large'), text('contributions')),
-      text(progress, stats.isRecord ? 'metric record' : 'metric'), ...(data.historyComplete ? [] : [text('Past year only')])));
+    return group('hero', dial, group('daily-best', text(stats.isRecord ? 'NEW DAILY BEST' : 'DAILY BEST', 'daily-best-label'),
+      ...(data.historyComplete ? [] : [text('Past year only', 'secondary')]),
+      group('split', text(num(stats.bestDay), 'large'), text('contributions', 'secondary')),
+      text(progress, stats.isRecord ? 'metric record' : 'metric')));
   }
 
   function streakCard() {
@@ -252,7 +254,7 @@
         const rank = p => { const i = prefs.favouriteOrder.indexOf(p.login); return i < 0 ? Infinity : i; };
         return rank(a) - rank(b) || a.login.localeCompare(b.login);
       }).map(p => el('p', '', p.name || p.login));
-      return group('', ...(rows.length ? rows : [text('No favourites in this fixture.') ]));
+      return group('', ...(rows.length ? rows : [text('Choose people in this widget’s settings.', 'secondary')]));
     } },
     momentum: { title:'Weekly momentum', heading:'This week', face:momentumCard },
     records: { title:'Personal bests', face:() => group('split records', ...[
