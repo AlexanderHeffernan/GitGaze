@@ -1,0 +1,42 @@
+name: Shared client review
+on:
+  push:
+    branches: [windows-shared-client]
+  pull_request:
+    paths: [SharedClient/**, Windows/**, .github/workflows/windows-review.yml]
+permissions:
+  contents: read
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: windows-2025, arch: x64 }
+          - { runner: windows-11-arm, arch: arm64 }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test SharedClient/core.test.js
+      - name: Publish review payload and run native process smoke test
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet publish Windows/GitGaze.Windows.csproj -c Release -r win-${{ matrix.arch }} --self-contained -o payload
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $process = Start-Process -FilePath "$PWD\payload\GitGaze.exe" -ArgumentList '--smoke-test','${{ matrix.arch }}' -PassThru -Wait
+          if ($process.ExitCode -ne 0) { exit $process.ExitCode }
+          Set-Content payload/commit.txt $env:GITHUB_SHA
+          Copy-Item LICENSE payload/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GitGaze-shared-review-win-${{ matrix.arch }}
+          path: payload

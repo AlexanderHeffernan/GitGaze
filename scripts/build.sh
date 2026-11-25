@@ -19,6 +19,10 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
 cp "$BIN/GitGaze" "$APP/Contents/MacOS/GitGaze"
 cp "$ROOT/Info.plist" "$APP/Contents/Info.plist"
+if [ "$CONFIGURATION" = debug ]; then
+    mkdir -p "$APP/Contents/Resources/SharedClient"
+    cp "$ROOT/SharedClient/"{dashboard.html,dashboard.css,core.js,dashboard.js,fixture.json} "$APP/Contents/Resources/SharedClient/"
+fi
 if [ -n "${RELEASE_VERSION:-}" ]; then
     [[ "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Invalid release version" >&2; exit 1; }
     /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $RELEASE_VERSION" "$APP/Contents/Info.plist"

@@ -1,0 +1,4 @@
+html { color-scheme:light dark; font:12px system-ui; }
+body { margin:0; padding:10px; display:grid; justify-items:center; }
+p { margin:0 0 8px; }
+iframe { width:min(384px,100%); height:min(640px,calc(100dvh - 50px)); border:1px solid #807b8940; border-radius:12px; }

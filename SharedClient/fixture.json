@@ -1,0 +1,39 @@
+{
+  "today": "2024-03-04",
+  "status": "Cached activity · review fixture",
+  "preferences": {
+    "modules": ["today", "streak", "heatmap", "favourites", "momentum", "records", "people", "years"],
+    "hidden": ["momentum", "records", "people", "years"],
+    "favourites": ["mira-fixture"], "favouriteOrder": ["mira-fixture"], "appearance": "light", "historyWeeks": 53
+  },
+  "dashboard": {
+    "profile": {
+      "person": { "login": "calendar-fixture", "name": "Calendar Review", "avatarUrl": "" },
+      "days": [
+        { "date": "2023-06-27", "contributionCount": 12, "color": "#216e39" },
+        { "date": "2023-09-13", "contributionCount": 4, "color": "#9be9a8" },
+        { "date": "2023-12-31", "contributionCount": 8, "color": "#30a14e" },
+        { "date": "2024-01-01", "contributionCount": 3, "color": "#40c463" },
+        { "date": "2024-02-27", "contributionCount": 9, "color": "#30a14e" },
+        { "date": "2024-02-28", "contributionCount": 0, "color": "#ebedf0" },
+        { "date": "2024-02-29", "contributionCount": 4, "color": "#40c463" },
+        { "date": "2024-03-01", "contributionCount": 6, "color": "#40c463" },
+        { "date": "2024-03-02", "contributionCount": 1, "color": "#9be9a8" },
+        { "date": "2024-03-03", "contributionCount": 3, "color": "#9be9a8" },
+        { "date": "2024-03-04", "contributionCount": 7, "color": "#40c463" },
+        { "date": "2024-03-05", "contributionCount": 25, "color": "#216e39" }
+      ],
+      "years": [2024, 2023], "totalContributions": 57, "restrictedCount": 9
+    },
+    "history": [
+      { "date": "2023-02-28", "contributionCount": 5, "color": "#40c463" },
+      { "date": "2023-03-04", "contributionCount": 6, "color": "#40c463" },
+      { "date": "2023-03-05", "contributionCount": 9, "color": "#30a14e" },
+      { "date": "2024-02-29", "contributionCount": 2, "color": "#9be9a8" }
+    ],
+    "historyComplete": true,
+    "following": [{ "login": "mira-fixture", "name": "Mira", "avatarUrl": "" }],
+    "people": {},
+    "updatedAt": 731289600
+  }
+}

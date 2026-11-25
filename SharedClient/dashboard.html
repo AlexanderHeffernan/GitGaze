@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
+  <title>GitGaze</title>
+  <link rel="stylesheet" href="dashboard.css">
+  <script src="core.js" defer></script>
+  <script src="dashboard.js" defer></script>
+</head>
+<body>
+  <header><h1 id="title">GitGaze</h1><nav aria-label="Dashboard actions" id="actions"></nav></header>
+  <main id="content" aria-label="Dashboard" tabindex="-1"><p>Loading…</p></main>
+  <footer><span id="status" role="status"></span><span id="account"></span></footer>
+  <template id="widget"><section><div class="card-heading"><h2></h2><div class="tools"></div></div><div class="face"></div></section></template>
+</body>
+</html>

@@ -63,6 +63,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             NSApp.terminate(nil)
             return
         }
+        #if DEBUG
+        if let index = CommandLine.arguments.firstIndex(of: "--compare-flyout"), index + 2 < CommandLine.arguments.count {
+            Task { await compareFlyout(mode: CommandLine.arguments[index + 1], output: CommandLine.arguments[index + 2]) }
+            return
+        }
+        #endif
         if !CommandLine.arguments.contains("--review") { store.updates.start() }
         Task {
             if CommandLine.arguments.contains("--enable-push-detection") { store.enablePushDetection(true) }
@@ -103,14 +109,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     @objc private func quit() { NSApp.terminate(nil) }
     private func showPopover() {
         guard let button = statusItem.button else { return }
+        #if DEBUG
+        if let review = flyoutReview {
+            let view = review.mode == "shared" ? review.controller(close: { [weak self] in self?.popover.performClose(nil) }) :
+                NSHostingController(rootView: DashboardView(store: store).environment(\.colorScheme, .light))
+            showPopover(view, from: button)
+            return
+        }
+        #endif
         store.settings = false
         // Each presentation owns its scroll position, expanded rows, searches and widget backs.
-        popover.contentViewController = NSHostingController(rootView: DashboardView(store: store))
+        let controller = NSHostingController(rootView: DashboardView(store: store))
         store.refresh()
+        showPopover(controller, from: button)
+    }
+
+    private func showPopover(_ controller: NSViewController, from button: NSStatusBarButton) {
+        popover.contentViewController = controller
         NSApp.activate(ignoringOtherApps: true)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()
     }
+
+    #if DEBUG
+    var flyoutReview: FlyoutReview?
+    var reviewPopover: NSPopover { popover }
+    var reviewStatusButton: NSStatusBarButton? { statusItem.button }
+    #endif
 
     /// Store changes arrive in bursts (objectWillChange fires before each property changes);
     /// collapse each burst into one status update after the values have settled.

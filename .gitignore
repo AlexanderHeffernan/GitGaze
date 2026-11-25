@@ -18,3 +18,5 @@ __pycache__/
 AuthKey_*.p8
 *.mobileprovision
 *.provisionprofile
+/Windows/bin/
+/Windows/obj/

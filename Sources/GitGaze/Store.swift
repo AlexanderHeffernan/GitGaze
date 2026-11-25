@@ -167,6 +167,9 @@ final class Store: ObservableObject {
         reminderHour = defaults.object(forKey: "reminderHour") as? Int ?? 18
         detectPushes = defaults.bool(forKey: "detectPushes")
         // Launch validation must never read credentials/cache or touch the user's Git integration.
+        #if DEBUG
+        if CommandLine.arguments.contains("--compare-flyout") { return }
+        #endif
         if CommandLine.arguments.contains("--smoke-test") { return }
         if let data = try? Data(contentsOf: cacheURL) {
             dashboard = try? JSONDecoder().decode(Dashboard.self, from: data)
@@ -202,6 +205,13 @@ final class Store: ObservableObject {
         }
         timer?.tolerance = 5
     }
+
+    #if DEBUG
+    func loadFlyoutFixture(_ fixture: FlyoutFixture) {
+        if let date = ISO8601DateFormatter().date(from: fixture.today + "T12:00:00Z") { now = date }
+        dashboard = fixture.dashboard
+    }
+    #endif
 
     func start() async {
         await useCLI()
