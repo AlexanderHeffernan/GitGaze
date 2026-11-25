@@ -271,8 +271,7 @@ function LeaderboardCard() {
         <span class="board-bar"><span style=${{ width: `${(row.count / maximum) * 100}%` }} /></span>
         <span class="board-count">${num(row.count)}</span></div>`)}</div>
       ${rows.length > limit && html`<button class="quiet more" onClick=${() => setLimit(limit + 10)}>Show more</button>`}
-      ${result.partial && html`<div class="tiny secondary">Ranked from the first ${memberLimit} of ${num(result.total)} members.</div>`}
-      ${result.privateHidden && html`<div class="tiny secondary scope-note">Private repositories aren’t counted yet. Run <code>${scopeCommand}</code> in a terminal, approve it, then refresh.</div>`}`;
+      ${result.partial && html`<div class="tiny secondary">Ranked from the first ${memberLimit} of ${num(result.total)} members.</div>`}`;
   };
   return html`<${Card}><div class="row"><${Heading}>LEADERBOARD<//><span class="spacer" />
     <span class="caption">${result ? `${result.organization.name || result.organization.login} · ${period}` : period}</span></div>
@@ -320,10 +319,19 @@ function WidgetOptions({ module }) {
           options=${organizations.map(o => [o.login, o.name || o.login])} onChange=${login => choose({ leaderboardOrg: login })} />`
           : html`<div class="small secondary">${store.board.loading ? 'Finding your organisations…' : 'No organisations found for this account.'}</div>`}
         <${ChoiceStrip} label="Period" value=${prefs.leaderboardPeriod} options=${periods} onChange=${period => choose({ leaderboardPeriod: period })} />
-        <div class="tiny secondary">Counts commits, pull requests, reviews and issues in the organisation’s repositories that are visible to you.</div></div>`;
+        <div class="tiny secondary">Counts commits, pull requests, reviews and issues in the organisation’s repositories you can see, private ones included.</div>
+        ${store.board.result && !store.board.result.exact && html`<${ScopeTip} />`}</div>`;
     }
   }
   return null;
+}
+
+/** Counting from repositories already includes private work; GitHub's exact counts are optional. */
+function ScopeTip() {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => { try { await navigator.clipboard.writeText(scopeCommand); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* The command stays selectable. */ } };
+  return html`<div class="tiny secondary scope-note">For GitHub’s exact contribution counts, run this once in a terminal, then refresh:
+    <div class="scope-command"><code>${scopeCommand}</code><button class="quiet link" onClick=${copy}>${copied ? 'Copied' : 'Copy'}</button></div></div>`;
 }
 
 /** Both faces keep their own state; only the facing side is interactive or exposed to accessibility. */

@@ -43,13 +43,17 @@ async function retrying(request, attempts = 3) {
   }
 }
 
-/** True when GitHub said the token's scopes, and they lack the one that reveals private work. */
-async function privateHidden() {
+/**
+ * GitHub attributes private-repository contributions to an organisation only for tokens with
+ * read:user, which GitHub CLI doesn't request. Without it, members are counted from the
+ * organisation's repositories instead, which the CLI's repo scope can read.
+ */
+async function exactCounts() {
   const scopes = await invoke('github_scopes');
-  return typeof scopes === 'string' && !scopes.split(',').some(scope => ['read:user', 'user'].includes(scope.trim()));
+  return typeof scopes !== 'string' || scopes.split(',').some(scope => ['read:user', 'user'].includes(scope.trim()));
 }
 
-/** Adding the scope needs a browser approval, so the command is shown rather than run. */
+/** Optional: lets GitHub count every contribution type exactly, instead of from repositories. */
 export const scopeCommand = 'gh auth refresh -h github.com -s read:user';
 
 async function members(login) {
@@ -66,28 +70,73 @@ async function members(login) {
   return { found: found.slice(0, memberLimit), total };
 }
 
-/**
- * Each member's contributions are counted in small batches, a few at a time: a year of
- * contributions for 50 members in one request exceeds GitHub's ten-second limit.
- */
-export async function standings(organization, period, now = new Date(), batch = 10, parallel = 3) {
-  const { found, total } = await members(organization.login);
+/** Runs tasks a few at a time. */
+async function pool(tasks, parallel) {
+  const queue = [...tasks];
+  await Promise.all(Array.from({ length: parallel }, async () => { for (let task; (task = queue.shift());) await task(); }));
+}
+
+const chunks = (items, size) => Array.from({ length: Math.ceil(items.length / size) }, (_, i) => items.slice(i * size, (i + 1) * size));
+
+/** GitHub's own per-organisation contribution counts. A year for 50 members exceeds its ten-second limit, so ten at a time. */
+async function contributionCounts(organization, people, variables, batch, parallel) {
   const counts = new Map();
-  const variables = { org: organization.id, from: periodStart(period, now), to: now.toISOString() };
-  const batches = [];
-  for (let i = 0; i < found.length; i += batch) batches.push(found.slice(i, i + batch).map(member => member.id));
-  const work = async () => {
-    for (let ids; (ids = batches.shift());) {
-      const data = await retrying(() => query(`query($ids:[ID!]!, $org:ID!, $from:DateTime!, $to:DateTime!) { nodes(ids:$ids) { ... on User { id
-        contributionsCollection(organizationID:$org, from:$from, to:$to) {
-          totalCommitContributions totalIssueContributions totalPullRequestContributions totalPullRequestReviewContributions } } } }`, { ...variables, ids }));
-      for (const node of data.nodes) {
-        const c = node?.contributionsCollection;
-        if (c) counts.set(node.id, c.totalCommitContributions + c.totalIssueContributions + c.totalPullRequestContributions + c.totalPullRequestReviewContributions);
-      }
+  await pool(chunks(people.map(p => p.id), batch).map(ids => async () => {
+    const data = await retrying(() => query(`query($ids:[ID!]!, $org:ID!, $from:DateTime!, $to:DateTime!) { nodes(ids:$ids) { ... on User { id
+      contributionsCollection(organizationID:$org, from:$from, to:$to) {
+        totalCommitContributions totalIssueContributions totalPullRequestContributions totalPullRequestReviewContributions } } } }`, { ...variables, org: organization.id, ids }));
+    for (const node of data.nodes) {
+      const c = node?.contributionsCollection;
+      if (c) counts.set(node.id, c.totalCommitContributions + c.totalIssueContributions + c.totalPullRequestContributions + c.totalPullRequestReviewContributions);
     }
-  };
-  await Promise.all(Array.from({ length: parallel }, work));
+  }), parallel);
+  return counts;
+}
+
+/**
+ * Counts from the repositories themselves: commits on each active repository's default branch,
+ * plus pull requests opened, issues opened and pull requests reviewed, from search. Search and
+ * history include private repositories the CLI can read.
+ */
+async function repositoryCounts(organization, people, { from, to }, batch, parallel) {
+  const counts = new Map(people.map(p => [p.id, 0]));
+  const add = (id, n) => counts.set(id, counts.get(id) + n);
+  const repositories = [];
+  let after = null;
+  do {
+    const data = await query(`query($login:String!, $after:String) { organization(login:$login) { repositories(first:100, after:$after, orderBy:{field:PUSHED_AT, direction:DESC}) {
+      pageInfo { hasNextPage endCursor } nodes { name pushedAt defaultBranchRef { id } } } } }`, { login: organization.login, after });
+    const page = data.organization.repositories;
+    const active = page.nodes.filter(r => r.pushedAt && r.pushedAt >= from);
+    repositories.push(...active.filter(r => r.defaultBranchRef));
+    after = page.pageInfo.hasNextPage && active.length === page.nodes.length ? page.pageInfo.endCursor : null;
+  } while (after);
+
+  const tasks = [];
+  for (const repository of repositories) for (const group of chunks(people, batch)) tasks.push(async () => {
+    const fields = group.map((p, i) => `a${i}: history(since:$from, until:$to, author:{id:${JSON.stringify(p.id)}}) { totalCount }`).join(' ');
+    const data = await retrying(() => query(`query($owner:String!, $name:String!, $from:GitTimestamp!, $to:GitTimestamp!) {
+      repository(owner:$owner, name:$name) { defaultBranchRef { target { ... on Commit { ${fields} } } } } }`, { owner: organization.login, name: repository.name, from, to }));
+    const target = data.repository?.defaultBranchRef?.target ?? {};
+    group.forEach((p, i) => add(p.id, target[`a${i}`]?.totalCount ?? 0));
+  });
+  const range = `${from.slice(0, 19)}+00:00..${to.slice(0, 19)}+00:00`;
+  for (const [kind, qualifier] of [['pr', 'author'], ['issue', 'author'], ['pr', 'reviewed-by']]) {
+    for (const group of chunks(people, 25)) tasks.push(async () => {
+      const fields = group.map((p, i) => `s${i}: search(type:ISSUE, first:0, query:${JSON.stringify(`org:${organization.login} is:${kind} ${qualifier}:${p.login} created:${range}`)}) { issueCount }`).join(' ');
+      const data = await retrying(() => query(`query { ${fields} }`));
+      group.forEach((p, i) => add(p.id, data[`s${i}`]?.issueCount ?? 0));
+    });
+  }
+  await pool(tasks, parallel);
+  return counts;
+}
+
+export async function standings(organization, period, now = new Date(), batch = 10, parallel = 4) {
+  const { found, total } = await members(organization.login);
+  const variables = { from: periodStart(period, now), to: now.toISOString() };
+  const exact = await exactCounts();
+  const counts = await (exact ? contributionCounts : repositoryCounts)(organization, found, variables, batch, parallel);
   const rows = found.map(({ id, login, name, avatarUrl }) => ({ login, ...(name ? { name } : {}), avatarUrl, count: counts.get(id) ?? 0 }));
-  return { rows: rank(rows), total, partial: total > found.length, privateHidden: await privateHidden() };
+  return { rows: rank(rows), total, partial: total > found.length, exact };
 }

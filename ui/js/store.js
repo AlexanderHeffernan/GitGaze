@@ -190,10 +190,10 @@ export class Store {
     if (this.loading) return;
     if (!this.#connected) { void this.useCLI(); return; }
     if (!force && this.updatedAt && Date.now() - this.updatedAt < 30_000) return;
-    void this.#refreshNow();
+    void this.#refreshNow(true, force);
   }
 
-  async #refreshNow(includeHistoryAndPeople = true) {
+  async #refreshNow(includeHistoryAndPeople = true, force = false) {
     if (!this.#connected || this.loading) return;
     const generation = this.#session;
     const current = () => generation === this.#session;
@@ -245,7 +245,7 @@ export class Store {
           if (current()) { this.peopleError = String(error.message ?? error); this.changed(); }
         }
       }
-      if (includeHistoryAndPeople && current()) void this.loadLeaderboard();
+      if (includeHistoryAndPeople && current()) void this.loadLeaderboard(force);
     } catch (error) {
       if (current()) this.error = String(error.message ?? error);
     } finally {
@@ -260,8 +260,8 @@ export class Store {
     const update = patch => { if (generation === this.#session) { this.board = { ...this.board, ...patch }; this.changed(); } };
     update({ loading: true, error: null });
     try {
-      // After the scope is added, the CLI may hold a new token, so a refresh reads it again.
-      if (force && this.board.result?.privateHidden) await github.connect();
+      // A manual refresh reads the CLI's token again, so a newly added scope applies at once.
+      if (force) await github.connect();
       const organizations = this.board.organizations && !force ? this.board.organizations : await leaderboard.organizations();
       update({ organizations });
       const organization = organizations.find(o => o.login === this.prefs.leaderboardOrg) ?? organizations[0];

@@ -268,4 +268,6 @@ footer .quiet { padding: 4px 7px; }
 }
 
 .scope-note { margin-top: 6px; }
+.scope-command { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.scope-command code { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .scope-note code { font: 10px ui-monospace, "SF Mono", Menlo, Consolas, monospace; user-select: text; -webkit-user-select: text; cursor: text; }
