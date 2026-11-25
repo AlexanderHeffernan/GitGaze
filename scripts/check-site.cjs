@@ -8,7 +8,6 @@ const axe = require.resolve('axe-core/axe.min.js');
 const url = process.argv[2] || 'http://localhost:8000/';
 const readme = readFileSync(join(__dirname, '../README.md'), 'utf8');
 const command = readme.match(/^curl -fsSL .*\/install\.sh \| bash$/m)[0];
-const archive = readme.match(/https:\/\/[^)]+\/releases\/latest\/download\/GitGaze\.zip/)[0];
 const nativeColors = readFileSync(join(__dirname, '../Sources/GitGaze/Components.swift'), 'utf8');
 const darkPalettes = [...nativeColors.matchAll(/case \.(\w+): dark \? \(([\d., ]+)\) :/g)];
 
@@ -20,16 +19,14 @@ async function checkCopy(page, action) {
 
 async function audit(page, label) {
   await page.addScriptTag({ path: axe });
-  const { version, violations, menuPassed } = await page.evaluate(async () => {
-    const { violations, passes } = await axe.run({ runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] } });
+  const { version, violations } = await page.evaluate(async () => {
+    const { violations } = await axe.run({ runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] } });
     return {
       version: axe.version,
       violations: violations.map(({ id, nodes }) => ({ id, targets: nodes.map(node => node.target) })),
-      menuPassed: passes.find(rule => rule.id === 'label-content-name-mismatch')?.nodes.some(node => node.target.includes('.menu-item')),
     };
   });
   assert.deepEqual(violations, [], `${label} (axe ${version})`);
-  assert(menuPassed, `${label}: axe ${version} must check the demo menu’s label`);
 }
 
 async function main() {
@@ -41,8 +38,7 @@ async function main() {
     page.on('response', response => { if (!response.ok()) errors.push(`${response.status()} ${response.url()}`); });
     assert.equal((await page.goto(url)).status(), 200);
     assert.equal(await page.locator('#install-command').textContent(), command);
-    assert.equal(await page.locator('.setup a').filter({ hasText: 'Download ZIP' }).getAttribute('href'), archive);
-    const menu = page.getByRole('button', { name: '12 14d, GitGaze menu', exact: true });
+    assert.equal(await page.getByRole('link', { name: 'GitHub CLI via Homebrew' }).getAttribute('href'), 'https://github.com/cli/cli/blob/trunk/docs/install_macos.md#homebrew');
     const popover = page.locator('#popover');
     const grid = page.getByRole('img', { name: 'Sample contribution heatmap, one year' });
     await grid.waitFor();
@@ -50,7 +46,7 @@ async function main() {
     const yearLevels = await levels(grid);
     assert.equal(yearLevels.at(-15), 0);
     assert(yearLevels.slice(-14).every(level => level > 0));
-    assert.equal(await menu.getAttribute('aria-description'), '12 contributions today and a 14-day streak');
+    assert.equal(await page.locator('[data-stat="today"]').textContent(), '12');
     assert.equal(await page.locator('[data-stat="streak"]').textContent(), '14');
 
     for (const width of [320, 390, 540, 541, 768, 780, 781, 1024, 1280, 1440]) {
@@ -63,10 +59,11 @@ async function main() {
           fits: document.documentElement.scrollWidth === innerWidth,
           sideBySide: preview.left >= copy.right && preview.top < copy.bottom,
           stacked: preview.top >= copy.bottom,
-          commandFits: document.querySelector('pre').scrollWidth === document.querySelector('pre').clientWidth,
+          commandSingleLine: document.querySelector('pre').scrollHeight === document.querySelector('pre').clientHeight && getComputedStyle(document.querySelector('pre')).whiteSpace === 'pre',
+          headingFits: bounds('h1 em').right <= copy.right + 1,
         };
       });
-      assert(layout.fits && layout.commandFits && (width <= 780 ? layout.stacked : layout.sideBySide), `${width}px: ${JSON.stringify(layout)}`);
+      assert(layout.fits && layout.commandSingleLine && layout.headingFits && (width <= 780 ? layout.stacked : layout.sideBySide), `${width}px: ${JSON.stringify(layout)}`);
     }
     await audit(page, 'Desktop axe violations');
     await page.keyboard.press('Tab');
@@ -81,7 +78,9 @@ async function main() {
     assert.equal(await page.locator(':focus').getAttribute('id'), 'install');
     await page.keyboard.press('Tab'); // Platform selector
     await page.keyboard.press('Tab');
-    assert.equal(await page.locator(':focus').textContent(), 'Copy command');
+    assert.equal(await page.locator(':focus').getAttribute('aria-label'), 'Install command');
+    await page.keyboard.press('Tab');
+    assert.equal(await page.locator(':focus').getAttribute('aria-label'), 'Copy command');
     await checkCopy(page, () => page.keyboard.press('Enter'));
     assert.equal(await page.evaluate(() => navigator.clipboard.readText()), command);
     await page.getByRole('radio', { name: 'macOS' }).press('ArrowRight');
@@ -89,13 +88,11 @@ async function main() {
     await page.getByText('GitGaze for Windows isn’t released yet.').waitFor();
     assert.equal(await page.getByRole('button', { name: 'Copy command' }).count(), 0);
     await page.getByRole('radio', { name: 'Windows' }).press('ArrowLeft');
-    await page.getByText('Required setup for script and ZIP', { exact: true }).click();
-    assert.equal(await page.locator('.setup li').count(), 3);
-    await page.getByRole('link', { name: 'Download ZIP' }).waitFor();
     assert.deepEqual(errors, []);
     console.log('Chromium: 10 widths, axe, skip link, visible focus, anchor, and exact keyboard clipboard copy passed');
 
     await page.reload();
+    await page.emulateMedia({ reducedMotion: 'reduce' });
     assert.equal(await page.getByRole('radio', { name: 'Violet' }).count(), 0);
     await page.locator('.theme-button').press('Enter');
     const violet = page.getByRole('radio', { name: 'Violet' });
@@ -110,18 +107,13 @@ async function main() {
       await page.getByRole('radio', { name: name[0].toUpperCase() + name.slice(1), exact: true }).check();
       const expected = `color(srgb ${rgb.split(', ').map(Number).join(' ')})`;
       assert.equal(await grid.locator('[data-level="4"]').first().evaluate(el => getComputedStyle(el).fill), expected);
-      assert.equal(await menu.locator('.charge').evaluate(el => getComputedStyle(el, '::after').backgroundColor), expected);
+      assert.equal(await page.locator('.brand-mark path').evaluate(el => getComputedStyle(el).stroke), expected);
     }
     await page.keyboard.press('Escape');
     assert.equal(await page.locator('.theme[open]').count(), 0);
     assert(await page.locator('.theme-button').evaluate(el => document.activeElement === el));
     assert.deepEqual(await popover.boundingBox().then(({ width, height }) => [width, height]), [384, 640]);
-    await menu.press('Space');
-    assert.equal(await menu.getAttribute('aria-expanded'), 'false');
-    assert.equal(await popover.isVisible(), false);
-    await page.emulateMedia({ reducedMotion: 'reduce' });
-    await menu.press('Enter');
-    assert.equal(await popover.evaluate(el => getComputedStyle(el).animationName), 'none');
+    assert.equal(await page.locator('.preview').evaluate(el => getComputedStyle(el).animationName), 'none');
     await page.getByRole('button', { name: 'Contribution history settings' }).click();
     const before = await grid.locator('rect').count();
     await page.getByRole('radio', { name: '6 months' }).check();
@@ -136,12 +128,15 @@ async function main() {
     assert.equal(await friend.getAttribute('aria-expanded'), 'true');
     assert(await page.getByRole('img', { name: 'Maya Chen’s sample full-year contribution heatmap' }).isVisible());
     assert.equal(await page.getByRole('img', { name: 'Jules Park’s sample full-year contribution heatmap' }).count(), 0);
+    const dashboard = page.getByRole('region', { name: 'Sample contribution dashboard' });
+    assert.equal(await dashboard.evaluate(el => getComputedStyle(el).scrollbarWidth), 'none');
+    await dashboard.press('Home');
+    await page.waitForFunction(() => document.querySelector('.app-body').scrollTop === 0);
+    await dashboard.press('End');
+    await page.waitForFunction(() => document.querySelector('.app-body').scrollTop > 0);
     await friend.press('Enter');
     assert.equal(await friend.getAttribute('aria-expanded'), 'false');
-    await page.keyboard.press('Escape');
-    assert.equal(await menu.getAttribute('aria-expanded'), 'false');
-    assert(await menu.evaluate(el => document.activeElement === el));
-    console.log('Chromium: 10 exact native palette colors, radio focus and arrows, popover, reduced motion, history range and friend graph passed');
+    console.log('Chromium: 10 exact native palettes on graph and logo, reduced motion, keyboard dashboard scrolling, history and friend graph passed');
 
     const blocked = await desktop.newPage({ permissions: ['clipboard-read'] });
     await blocked.goto(url);
@@ -165,10 +160,6 @@ async function main() {
     assert(await page.evaluate(() => matchMedia('(pointer: coarse)').matches && document.documentElement.scrollWidth === innerWidth));
     await audit(page, 'Mobile axe violations');
     assert(await page.locator('.friend').last().evaluate(row => row.getBoundingClientRect().bottom <= row.closest('.app-body').getBoundingClientRect().bottom));
-    const menu = page.getByRole('button', { name: '12 14d, GitGaze menu', exact: true });
-    await menu.tap();
-    assert.equal(await menu.getAttribute('aria-expanded'), 'false');
-    await menu.tap();
     await page.locator('.theme-button').tap();
     await page.getByRole('radio', { name: 'Mint' }).tap();
     assert(await page.getByRole('radio', { name: 'Mint' }).isChecked());
@@ -189,6 +180,7 @@ async function main() {
     await page.getByRole('radio', { name: 'Windows' }).tap();
     await page.getByText('GitGaze for Windows isn’t released yet.').waitFor();
     await page.getByRole('radio', { name: 'macOS' }).tap();
+    assert(await page.locator('.terminal pre').evaluate(el => el.scrollWidth > el.clientWidth));
     await checkCopy(page, copy => copy.tap());
     console.log('WebKit iPhone 14 emulation: coarse pointer, reflow, axe, sticky palette, popover, range, friend graph, and install copy passed');
   } finally {

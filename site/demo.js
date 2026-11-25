@@ -5,9 +5,6 @@ const colors = {
   Orchid: '.86 .56 1', Lagoon: '.30 .85 .86',
 };
 
-const preview = document.querySelector('.preview');
-const menu = preview.querySelector('.menu-item');
-const popover = document.querySelector('#popover');
 const theme = document.querySelector('.theme');
 const themeButton = theme.querySelector('summary');
 const palettes = document.querySelector('#palettes');
@@ -44,24 +41,11 @@ document.addEventListener('click', event => {
   if (!theme.contains(event.target)) theme.open = false;
 });
 
-function showPopover(open) {
-  menu.setAttribute('aria-expanded', open);
-  popover.hidden = !open;
-}
-
-menu.addEventListener('click', () => showPopover(popover.hidden));
-preview.addEventListener('keydown', event => {
-  if (event.key === 'Escape' && !popover.hidden) {
-    showPopover(false);
-    menu.focus();
-  }
-});
 palettes.addEventListener('change', event => {
   const name = event.target.value;
   document.documentElement.style.setProperty('--accent', `color(srgb ${colors[name]})`);
   paletteName.textContent = name;
   themeButton.setAttribute('aria-label', `Preview theme: ${name}`);
-  if (popover.hidden) showPopover(true);
 });
 
 function sampleScore(index) {
@@ -84,11 +68,9 @@ for (const count of activity) {
 }
 const today = activity.at(-1);
 const dailyBest = Math.max(...activity);
-const stats = { today, dailyBest, streak, bestStreak, chargeStreak: `${streak}d`,
+const stats = { today, dailyBest, streak, bestStreak,
   toBeat: `${dailyBest - today + 1} to beat it`, year: sum(activity).toLocaleString('en-US'), week: sum(activity.slice(-3)) };
 document.querySelectorAll('[data-stat]').forEach(el => { el.textContent = stats[el.dataset.stat]; });
-menu.setAttribute('aria-label', `${today} ${stats.chargeStreak}, GitGaze menu`);
-menu.setAttribute('aria-description', `${today} contributions today and a ${streak}-day streak`);
 
 function drawHeatmap(weeks, target = heatmap, seed = 0, miniature = false) {
   const short = weeks === 26;
@@ -157,5 +139,4 @@ document.querySelectorAll('.friend-toggle').forEach((button, index) => {
 });
 
 drawHeatmap(53);
-menu.disabled = false;
 historyToggle.hidden = false;

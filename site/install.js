@@ -17,9 +17,11 @@ showPlatform();
 if (navigator.clipboard?.writeText) {
   copyButton.hidden = false;
   copyButton.addEventListener('click', async () => {
+    copyButton.removeAttribute('data-copied');
     status.textContent = '';
     try {
       await navigator.clipboard.writeText(command.textContent);
+      copyButton.setAttribute('data-copied', '');
       status.textContent = 'Command copied.';
     } catch {
       status.textContent = 'Couldn’t copy. Select the command and copy it manually.';
