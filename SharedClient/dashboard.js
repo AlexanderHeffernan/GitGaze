@@ -291,7 +291,7 @@
     }
     if (gallery || openSettings) tools.classList.add('active');
     const panel = section.querySelector('.face');
-    if (openSettings) panel.classList.add('flipping');
+    if (openSettings && key !== 'leaderboard') panel.classList.add('flipping');
     panel.append(openSettings ? settings() : face(gallery));
     return section;
   }
