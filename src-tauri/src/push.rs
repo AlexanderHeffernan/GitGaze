@@ -203,7 +203,11 @@ mod platform {
         format!(r"\\.\pipe\gitgaze-push-{user}")
     }
 
-    pub struct Listener(tauri::async_runtime::JoinHandle<()>);
+    /// Pipe instances kept waiting for Git. Every Git process opens its own connection (a push
+    /// runs several), and Git checks the path before opening it, which briefly takes one too.
+    const WAITING: usize = 4;
+
+    pub struct Listener(Vec<tauri::async_runtime::JoinHandle<()>>);
 
     impl Listener {
         pub fn start(on_push: OnPush) -> Result<Self, String> {
@@ -214,34 +218,45 @@ mod platform {
             })
             .map_err(|_| "Another GitGaze push listener is already running.".to_string())?;
             let events = Arc::new(Mutex::new(PushEvents::default()));
-            let task = tauri::async_runtime::spawn(async move {
-                let mut server = first;
-                loop {
-                    if server.connect().await.is_err() {
-                        continue;
-                    }
-                    let client = server;
-                    server = match ServerOptions::new().create(&name) {
-                        Ok(next) => next,
-                        Err(_) => return,
-                    };
-                    let (events, on_push) = (events.clone(), on_push.clone());
+            let mut first = Some(first);
+            let tasks = (0..WAITING)
+                .map(|_| {
+                    let (name, events, on_push, mut waiting) = (name.clone(), events.clone(), on_push.clone(), first.take());
                     tauri::async_runtime::spawn(async move {
-                        // Each Git process writes one JSON event per line, then disconnects.
-                        let mut lines = BufReader::new(client).lines();
-                        while let Ok(Some(line)) = lines.next_line().await {
-                            if events.lock().unwrap().receive(line.as_bytes()) {
-                                on_push();
+                        loop {
+                            let server = match waiting.take() {
+                                Some(server) => server,
+                                None => match ServerOptions::new().create(&name) {
+                                    Ok(server) => server,
+                                    Err(_) => return,
+                                },
+                            };
+                            // A client that left before the connection completed leaves the
+                            // instance unusable, so it is dropped and replaced.
+                            if server.connect().await.is_err() {
+                                continue;
                             }
+                            let (events, on_push) = (events.clone(), on_push.clone());
+                            tauri::async_runtime::spawn(async move {
+                                // Each Git process writes one JSON event per line, then disconnects.
+                                let mut lines = BufReader::new(server).lines();
+                                while let Ok(Some(line)) = lines.next_line().await {
+                                    if events.lock().unwrap().receive(line.as_bytes()) {
+                                        on_push();
+                                    }
+                                }
+                            });
                         }
-                    });
-                }
-            });
-            Ok(Self(task))
+                    })
+                })
+                .collect();
+            Ok(Self(tasks))
         }
 
         pub fn stop(self) {
-            self.0.abort();
+            for task in self.0 {
+                task.abort();
+            }
         }
     }
 }

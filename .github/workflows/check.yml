@@ -106,7 +106,9 @@ jobs:
           for i in $(seq 1 40); do [ -s "$WORK/listener.txt" ] && break; sleep 0.25; done
           TARGET="$(head -n1 "$WORK/listener.txt" | tr -d '\r')"
           echo "Trace2 target: $TARGET"
-          git -C "$WORK/repo" -c "trace2.eventTarget=$TARGET" push -q "$WORK/remote.git" HEAD:main
+          # Git reads trace2 settings only from system and global config, never from -c.
+          git config --file "$WORK/global.cfg" trace2.eventTarget "$TARGET"
+          GIT_CONFIG_GLOBAL="$WORK/global.cfg" GIT_TRACE2_DST_DEBUG=1 git -C "$WORK/repo" push -q "$WORK/remote.git" HEAD:main
           wait "$PID"
           grep -q "push detected" "$WORK/listener.txt"
       - uses: actions/upload-artifact@v4
