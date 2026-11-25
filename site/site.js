@@ -3,6 +3,7 @@
 
 import { drawLabel, drawTrayIcon, figures, menuStyles } from './app/js/status.js';
 import { palettes, title } from './app/js/theme.js';
+import { markSVG } from './app/js/mark.js';
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
@@ -15,7 +16,7 @@ const rgb = values => values.map(v => Math.round(v * 255)).join(' ');
 const detected = /Win/.test(navigator.platform) || /Windows/.test(navigator.userAgent) ? 'windows' : /Mac|iPhone|iPad/.test(navigator.platform) ? 'macos' : null;
 let platform = detected ?? 'macos';
 let scheme = 'dark';
-let palette = 'violet';
+let palette = 'green';
 let store = null;
 
 // ----- Copy that follows the visitor's platform -----
@@ -24,7 +25,7 @@ if (detected) {
   const mac = detected === 'macos';
   $$('[data-os-name]').forEach(el => { el.textContent = mac ? 'macOS, and Windows too' : 'Windows, and macOS too'; });
   $$('[data-bar-name]').forEach(el => { el.textContent = mac ? 'menu bar' : 'system tray'; });
-  $('[data-download] span').textContent = `Get GitGaze for ${mac ? 'Mac' : 'Windows'}`;
+  $('[data-download] span').textContent = `Get Stoke for ${mac ? 'Mac' : 'Windows'}`;
 }
 
 function clock() {
@@ -38,6 +39,9 @@ clock();
 setInterval(clock, 15000);
 
 // ----- Accent -----
+
+// The brand mark follows the accent too.
+$$('[data-mark]').forEach(el => { el.innerHTML = markSVG('currentColor', { size: Number(el.dataset.mark) }); });
 
 function setAccent(prefs) {
   const value = prefs.palette === 'custom' ? null : palettes[prefs.palette]?.[1];

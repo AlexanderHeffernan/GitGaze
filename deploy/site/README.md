@@ -1,6 +1,9 @@
 # Site hosting
 
-gitgaze.alexheffernan.dev runs on the Raspberry Pi (`alexs-pi`, user `alexh`) in `~/gitgaze-site`:
+The site was gitgaze.alexheffernan.dev until the app became Stoke; that host now redirects. The
+`gitgaze-site` names for the directory, timer and tunnel are unchanged.
+
+stoke.alexheffernan.dev runs on the Raspberry Pi (`alexs-pi`, user `alexh`) in `~/gitgaze-site`:
 
 - `repo/` is a clone of this repository on `main`. nginx serves `repo/site` read-only.
 - A dedicated Cloudflare tunnel (`gitgaze-site`) carries public traffic to nginx; its
@@ -21,7 +24,9 @@ journalctl --user -u gitgaze-site-update.service                               #
 tunnel: <tunnel id>
 credentials-file: /etc/cloudflared/credentials.json
 ingress:
-  - hostname: gitgaze.alexheffernan.dev
+  - hostname: stoke.alexheffernan.dev
+    service: http://web:80
+  - hostname: gitgaze.alexheffernan.dev   # nginx redirects it to stoke.alexheffernan.dev
     service: http://web:80
   - service: http_status:404
 ```
