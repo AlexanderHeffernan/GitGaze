@@ -64,7 +64,14 @@
   const cacheTimestamp = value => new Date(Date.UTC(2001, 0, 1) + value * 1000);
   const accountChanged = (cache, verifiedViewer) => !!cache && cache.profile.person.login.toLowerCase() !== verifiedViewer.toLowerCase();
 
-  const core = { offset, weekday, monday, localDay, statistics, preferences, moveWidget, cacheTimestamp, accountChanged };
+  function orderPeople(people, { favourites, favouriteOrder }) {
+    const selected = new Set(favourites), rank = new Map(favouriteOrder.map((login, index) => [login, index]));
+    return [...people].sort((a, b) => Number(selected.has(b.login)) - Number(selected.has(a.login)) ||
+      (selected.has(a.login) && (rank.get(a.login) ?? Infinity) - (rank.get(b.login) ?? Infinity)) ||
+      a.login.localeCompare(b.login, undefined, { sensitivity:'base' }));
+  }
+
+  const core = { offset, weekday, monday, localDay, statistics, preferences, moveWidget, cacheTimestamp, accountChanged, orderPeople };
   if (typeof module === 'object') module.exports = core;
   else globalThis.gitGazeCore = core;
 })();

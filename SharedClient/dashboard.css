@@ -61,6 +61,29 @@ section:hover .tools, section:focus-within .tools, .tools.active { opacity:1; }
 .heat-dates .secondary { font-size:8px; }
 .week-summary { display:flex; align-items:baseline; gap:5px; }
 .previous-week { margin-inline-start:auto; }
+.year-chart { display:block; width:100%; height:100px; margin:6px 0; }
+.year-key, .year-delta { color:var(--accent); }
+.year-delta { margin-inline-start:auto; }
+.yearly-empty { padding-block:18px; }
+.person-row { display:grid; grid-template-columns:minmax(0,1fr) 152px; gap:5px 10px; align-items:center; padding:6px 0; }
+.person-row + .person-row { border-top:1px solid var(--edge); }
+.person-name { display:grid; grid-template-columns:21px minmax(0,1fr); align-items:center; gap:4px; }
+.avatar { border-radius:50%; background:color-mix(in srgb, var(--accent) 20%, transparent); display:grid; place-items:center; width:21px; height:21px; font-size:10px; }
+.person-title { font-size:10px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.person-metrics { display:grid; grid-column:1/-1; grid-template-columns:repeat(4,1fr); gap:5px; }
+.person-metrics .secondary { font-size:7px; margin-top:3px; }
+.person-mini, .person-full { background:color-mix(in srgb, var(--accent) 4%, transparent); padding:4px; }
+.person-full { grid-column:1/-1; }
+.person-mini .heat-calendar:has([data-weeks='26']) { height:auto; margin:0; }
+.person-mini .heat { row-gap:1px; }
+.person-mini .heat[data-weeks='26'] span { width:calc(100% - 1px); }
+.people-settings input { width:100%; padding:8px 11px; border:1px solid var(--edge); border-radius:9px; color:inherit; background:transparent; font:inherit; }
+.person-option { display:flex; align-items:center; gap:8px; min-height:32px; }
+.person-option .people-controls { display:flex; margin-inline-start:auto; }
+.palette-options { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; }
+.palette-options button { font-size:9px; }
+.palette-options button::before { content:''; display:block; width:20px; height:20px; margin:0 auto 4px; border-radius:50%; background:var(--swatch); }
+.palette-options button[aria-pressed='true'] { border-color:var(--accent); }
 .week-chart { display:flex; justify-content:space-around; align-items:end; height:70px; }
 .week-day { display:grid; justify-items:center; gap:5px; }
 .week-day .secondary { font-size:8px; }
