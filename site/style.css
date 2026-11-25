@@ -48,8 +48,57 @@ em { font-style: normal; color: var(--accent); transition: color 300ms ease; }
   box-shadow: 0 10px 30px rgb(0 0 0 / 0.25);
 }
 .brand { display: inline-flex; align-items: center; gap: 9px; font-weight: 750; letter-spacing: -0.03em; font-size: 1.06rem; text-decoration: none; }
-.mark { display: flex; color: var(--accent); transition: color 300ms ease, transform 220ms ease; }
-.brand:hover .mark { transform: rotate(-8deg); }
+.mark { display: flex; color: var(--accent); transition: color 300ms ease; }
+.mark svg { overflow: visible; }
+
+/* Stoke, the mascot. Squares flicker on their own beats; .hop and .blink are set from mascot.js. */
+.mark .sq { animation: flicker var(--beat, 1.6s) ease-in-out var(--delay, 0s) infinite alternate; }
+@keyframes flicker { from { opacity: 1; } to { opacity: var(--low, 0.8); } }
+.nav .mark .sq, .footer .mark .sq { animation-play-state: paused; }
+.brand:hover .mark .sq { animation-play-state: running; animation-duration: 0.35s; }
+.mark .eyes { transform-box: fill-box; transform-origin: center; transition: transform 90ms ease; }
+.mark .pupil { transition: transform 160ms ease-out; }
+.blink .eyes { transform: scaleY(0.12); }
+.mascot {
+  position: relative; display: inline-block; vertical-align: -0.08em; margin-left: 0.18em; padding: 0; border: 0;
+  background: none; color: inherit; cursor: pointer; font: inherit; letter-spacing: 0; line-height: 0;
+}
+.mascot .mark { width: 0.96em; transform-origin: 50% 100%; animation: sway 3.2s ease-in-out infinite; }
+.mascot .mark svg { width: 100%; height: auto; }
+.mascot:focus-visible { outline: 2px solid var(--accent); outline-offset: 6px; border-radius: 12px; }
+.mascot.hop .mark { animation: hop 620ms cubic-bezier(.3,.7,.4,1); }
+@keyframes sway { 0%, 100% { transform: skewX(0deg) scaleY(1); } 30% { transform: skewX(-2.5deg) scaleY(1.02); } 70% { transform: skewX(2deg) scaleY(0.99); } }
+@keyframes hop { 0% { transform: translateY(0) scale(1, 1); } 15% { transform: translateY(0) scale(1.12, 0.86); } 45% { transform: translateY(-26%) scale(0.92, 1.1); } 75% { transform: translateY(0) scale(1.08, 0.92); } 100% { transform: translateY(0) scale(1); } }
+.bubble {
+  position: absolute; left: 82%; bottom: 92%; padding: 7px 12px; border-radius: 12px 12px 12px 3px;
+  background: var(--raised); border: 1px solid rgb(var(--accent-rgb) / 0.35); color: var(--text);
+  font: 700 0.86rem/1.2 var(--rounded); letter-spacing: 0; white-space: nowrap; pointer-events: none;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.35); opacity: 0; transform: translateY(6px) scale(0.92); transform-origin: 0 100%;
+  transition: opacity 180ms ease, transform 220ms cubic-bezier(.3,.7,.4,1.3);
+}
+.bubble.show { opacity: 1; transform: none; }
+.spark {
+  position: absolute; z-index: 20; border-radius: 2px; background: var(--accent); pointer-events: none;
+  animation: spark 900ms cubic-bezier(.2,.6,.3,1) forwards;
+}
+@keyframes spark { to { transform: translate(var(--x), var(--y)) rotate(var(--spin)) scale(0.4); opacity: 0; } }
+
+/* The commit field behind the hero, drawn in mascot.js. */
+.field {
+  position: absolute; z-index: -1; top: -90px; left: 50%; width: 100vw; height: calc(100% + 90px); transform: translateX(-50%);
+  pointer-events: none; mask-image: linear-gradient(to bottom, #000 60%, transparent);
+}
+
+/* A streak that fills in as it scrolls into view. */
+.streak { display: flex; align-items: flex-end; justify-content: center; gap: 5px; padding: 40px 0 8px; }
+.streak i { width: 14px; height: 14px; border-radius: 3.5px; background: rgb(255 255 255 / 0.06); transition: background 300ms ease, transform 300ms cubic-bezier(.3,.7,.4,1.4); transition-delay: calc(var(--i) * 45ms); }
+.streak.on i { transform: scale(1); }
+.streak.on i[data-level='1'] { background: rgb(var(--accent-rgb) / 0.3); }
+.streak.on i[data-level='2'] { background: rgb(var(--accent-rgb) / 0.52); }
+.streak.on i[data-level='3'] { background: rgb(var(--accent-rgb) / 0.76); }
+.streak.on i[data-level='4'] { background: var(--accent); }
+.streak-mascot { margin-left: 8px; transform-origin: 50% 100%; }
+.streak-mascot.hop { animation: hop 620ms cubic-bezier(.3,.7,.4,1) 2; }
 .nav-links { display: flex; gap: 2px; margin: 0 auto 0 18px; }
 .nav-links a, .icon-link { padding: 8px 12px; border-radius: 999px; color: var(--muted); font-size: 0.9rem; text-decoration: none; transition: color 160ms, background 160ms; }
 .nav-links a:hover, .icon-link:hover { color: var(--text); background: rgb(255 255 255 / 0.06); }
@@ -69,10 +118,10 @@ em { font-style: normal; color: var(--accent); transition: color 300ms ease; }
 .button.ghost:hover { background: rgb(255 255 255 / 0.06); }
 
 /* Hero */
-.hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 560px); gap: clamp(28px, 5vw, 72px); align-items: center; padding: clamp(16px, 3vw, 28px) 0 24px; }
+.hero { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 560px); gap: clamp(28px, 5vw, 72px); align-items: center; padding: clamp(16px, 3vw, 28px) 0 24px; }
 .eyebrow { display: inline-flex; align-items: center; gap: 9px; margin: 0; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); transition: color 300ms; }
 .eyebrow.center { display: flex; justify-content: center; }
-.dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 12px currentColor; }
+.dot { width: 8px; height: 8px; border-radius: 2px; background: currentColor; box-shadow: 0 0 12px currentColor; }
 h1, h2 { font-weight: 800; letter-spacing: -0.045em; line-height: 0.98; margin: 0; }
 h1 { font-size: clamp(2.8rem, 6vw, 4.7rem); margin: 18px 0 24px; }
 h1 em { display: block; }
@@ -243,6 +292,7 @@ h2 { font-size: clamp(2.3rem, 5vw, 3.6rem); text-align: center; margin: 14px 0 4
 @media (max-width: 980px) {
   .hero { grid-template-columns: 1fr; text-align: center; }
   .hero-copy { display: grid; justify-items: center; }
+  .bubble { left: 50%; bottom: 104%; border-radius: 12px; transform-origin: 50% 100%; translate: -50% 0; }
   .lede { margin-inline: auto; }
   .cta { justify-content: center; }
   .demo { width: 100%; }
@@ -266,4 +316,6 @@ h2 { font-size: clamp(2.3rem, 5vw, 3.6rem); text-align: center; margin: 14px 0 4
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   * { transition: none !important; }
+  .mark .sq, .mascot .mark, .mascot.hop .mark, .streak-mascot.hop { animation: none; }
+  .field { display: none; }
 }
