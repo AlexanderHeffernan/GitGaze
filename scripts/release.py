@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Deterministic release versions and checks on the generated public appcast."""
-import plistlib
+import json
 import re
 import subprocess
 import sys
@@ -45,7 +45,7 @@ def verify_feed(directory, version):
 
 if __name__ == "__main__":
     if sys.argv[1:] == ["version"]:
-        base = plistlib.loads(Path("Info.plist").read_bytes())["CFBundleShortVersionString"]
+        base = json.loads(Path("src-tauri/tauri.conf.json").read_text())["version"]
         git_tags = lambda *args: subprocess.check_output(["git", "tag", *args], text=True).splitlines()
         print(next_version(base, git_tags("--merged", "HEAD"), git_tags("--points-at", "HEAD")))
     elif len(sys.argv) == 4 and sys.argv[1] == "verify":

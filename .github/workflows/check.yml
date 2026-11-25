@@ -9,48 +9,114 @@ permissions:
 concurrency:
   group: gitgaze-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+env:
+  CARGO_TERM_COLOR: always
 jobs:
-  macos:
+  build:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-15, macos-15-intel]
+        include:
+          - name: macOS universal
+            os: macos-15
+            platform: macos
+            target: universal-apple-darwin
+            rust: aarch64-apple-darwin,x86_64-apple-darwin
+          - name: Windows x64
+            os: windows-latest
+            platform: windows
+            arch: x64
+            target: x86_64-pc-windows-msvc
+            rust: x86_64-pc-windows-msvc
+          - name: Windows ARM64
+            os: windows-11-arm
+            platform: windows
+            arch: arm64
+            target: aarch64-pc-windows-msvc
+            rust: aarch64-pc-windows-msvc
+    name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           persist-credentials: false
-      - uses: swift-actions/setup-swift@v3
+      - uses: actions/setup-node@v4
         with:
-          swift-version: "6.2.4"
-      - name: Test
-        run: swift test
-      - name: Test release
-        run: swift test -c release
-      - name: Test release contracts
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.target }}
+      - name: Install tools
+        run: npm ci
+      - name: Test UI logic
+        run: npm test
+      - name: Test release signing
         run: python3 -m unittest discover -s scripts -p 'test_*.py'
-      - name: Build app bundle
-        run: ./scripts/build.sh
-      - name: Smoke test packaged app
-        run: .build/GitGaze.app/Contents/MacOS/GitGaze --smoke-test
-      - name: Exercise live Git listener
+      - name: Test native shell
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+      - name: Build
+        run: |
+          VERSION="$(python3 scripts/release.py version)"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          BUNDLE=$([ "${{ matrix.platform }}" = macos ] && echo app || echo nsis)
+          npx tauri build --target ${{ matrix.target }} --bundles "$BUNDLE" --config "{\"version\":\"$VERSION\"}"
+      - name: Collect macOS app
+        if: matrix.platform == 'macos'
         run: |
           set -euo pipefail
-          .build/GitGaze.app/Contents/MacOS/GitGaze --listener-smoke-test &
+          APP=src-tauri/target/universal-apple-darwin/release/bundle/macos/GitGaze.app
+          lipo "$APP/Contents/MacOS/GitGaze" -verify_arch arm64 x86_64
+          codesign --verify --deep --strict "$APP"
+          test "$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$APP/Contents/Info.plist")" = app.gitbar.mac
+          test "$(/usr/libexec/PlistBuddy -c 'Print CFBundleVersion' "$APP/Contents/Info.plist")" = "$VERSION"
+          "$APP/Contents/MacOS/GitGaze" --smoke-test
+          echo "BINARY=$APP/Contents/MacOS/GitGaze" >> "$GITHUB_ENV"
+          # Archive here: artifact uploads drop the executable bit inside bundles.
+          mkdir -p dist
+          ditto -c -k --sequesterRsrc --keepParent "$APP" dist/GitGaze.zip
+          tar -czf dist/GitGaze.app.tar.gz -C "$(dirname "$APP")" GitGaze.app
+      - name: Collect Windows installer
+        if: matrix.platform == 'windows'
+        run: |
+          set -euo pipefail
+          EXE=src-tauri/target/${{ matrix.target }}/release/GitGaze.exe
+          "$EXE" --smoke-test > smoke.txt
+          cat smoke.txt
+          grep -q "GitGaze $VERSION launch smoke test passed" smoke.txt
+          echo "BINARY=$EXE" >> "$GITHUB_ENV"
+          mkdir -p dist
+          cp src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*-setup.exe "dist/GitGaze-windows-${{ matrix.arch }}-setup.exe"
+      - name: Detect a real Git push
+        run: |
+          set -euo pipefail
+          WORK="$(mktemp -d)"
+          git init -q --bare "$WORK/remote.git"
+          git init -q "$WORK/repo"
+          git -C "$WORK/repo" -c user.name=CI -c user.email=ci@example.com commit -q --allow-empty -m test
+          "$BINARY" --listener-smoke-test > "$WORK/listener.txt" 2>&1 &
           PID=$!
-          trap 'kill "$PID" 2>/dev/null || true' EXIT
-          SOCKET="$HOME/Library/Caches/GitBar/push.sock"
-          for ((i=0; i<40; i++)); do
-            [ -S "$SOCKET" ] && break
-            sleep 0.25
-          done
-          test -S "$SOCKET"
-          git -c "trace2.eventTarget=af_unix:dgram:$SOCKET" status --porcelain >/dev/null
-          sleep 2
-          kill -0 "$PID"
+          for i in $(seq 1 40); do [ -s "$WORK/listener.txt" ] && break; sleep 0.25; done
+          TARGET="$(head -n1 "$WORK/listener.txt" | tr -d '\r')"
+          echo "Trace2 target: $TARGET"
+          git -C "$WORK/repo" -c "trace2.eventTarget=$TARGET" push -q "$WORK/remote.git" HEAD:main
+          wait "$PID"
+          grep -q "push detected" "$WORK/listener.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}-${{ matrix.arch || 'universal' }}
+          path: dist/
+          if-no-files-found: error
 
   release:
-    needs: macos
+    needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'AlexanderHeffernan/GitGaze'
     runs-on: macos-15
     permissions:
@@ -60,9 +126,6 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: swift-actions/setup-swift@v3
-        with:
-          swift-version: "6.2.4"
       - name: Determine immutable release version
         id: version
         env:
@@ -76,66 +139,30 @@ jobs:
             echo "published=true" >> "$GITHUB_OUTPUT"
             echo "This commit is already released as v$VERSION."
           fi
-      - name: Configure Developer ID and notarisation
-        if: steps.version.outputs.published != 'true' && vars.MACOS_SIGNING_ENABLED == 'true'
-        env:
-          CERTIFICATE: ${{ secrets.DEVELOPER_ID_CERTIFICATE_BASE64 }}
-          CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_CERTIFICATE_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          set -euo pipefail
-          umask 077
-          : "${CERTIFICATE:?Missing signing certificate}" "${CERTIFICATE_PASSWORD:?Missing certificate password}"
-          : "${APPLE_ID:?Missing Apple ID}" "${APPLE_APP_PASSWORD:?Missing notarisation password}" "${APPLE_TEAM_ID:?Missing team ID}"
-          PASSWORD="$(openssl rand -hex 32)"
-          echo "::add-mask::$PASSWORD"
-          KEYCHAIN="$RUNNER_TEMP/gitgaze-signing.keychain-db"
-          security create-keychain -p "$PASSWORD" "$KEYCHAIN"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN"
-          security unlock-keychain -p "$PASSWORD" "$KEYCHAIN"
-          printf '%s' "$CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
-          chmod 600 "$RUNNER_TEMP/certificate.p12"
-          security import "$RUNNER_TEMP/certificate.p12" -k "$KEYCHAIN" -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$PASSWORD" "$KEYCHAIN" >/dev/null
-          security list-keychains -d user -s "$KEYCHAIN" "$HOME/Library/Keychains/login.keychain-db"
-          IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN" | awk '/Developer ID Application/ {print $2; exit}')"
-          test -n "$IDENTITY"
-          echo "CODESIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
-          xcrun notarytool store-credentials gitgaze-notary --keychain "$KEYCHAIN" --apple-id "$APPLE_ID" --password "$APPLE_APP_PASSWORD" --team-id "$APPLE_TEAM_ID"
-          echo 'NOTARY_PROFILE=gitgaze-notary' >> "$GITHUB_ENV"
-          echo "NOTARY_KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
-      - name: Build universal app and signed update feed
+      - uses: actions/download-artifact@v4
+        if: steps.version.outputs.published != 'true'
+        with:
+          path: artifacts
+      - name: Package, sign, and verify updates
         if: steps.version.outputs.published != 'true'
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
-          RELEASE_VERSION: ${{ steps.version.outputs.version }}
-          RELEASE_NOTES_FILE: ${{ runner.temp }}/gitgaze-notes.md
+          VERSION: ${{ steps.version.outputs.version }}
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           test -n "$SPARKLE_PRIVATE_KEY" || { echo 'Configure SPARKLE_PRIVATE_KEY before releasing.' >&2; exit 1; }
-          gh api --method POST "repos/$GITHUB_REPOSITORY/releases/generate-notes" \
-            -f tag_name="v$RELEASE_VERSION" -f target_commitish="$GITHUB_SHA" --jq .body > "$RELEASE_NOTES_FILE"
-          ./scripts/package-release.sh "$RELEASE_VERSION"
-          lipo .build/GitGaze.app/Contents/MacOS/GitGaze -verify_arch arm64
-          lipo .build/GitGaze.app/Contents/MacOS/GitGaze -verify_arch x86_64
+          bash scripts/package-release.sh "$VERSION" artifacts dist
       - name: Publish complete release for the tested commit
         if: steps.version.outputs.published != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          TAG="v$RELEASE_VERSION"
+          TAG="v$VERSION"
           if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" --draft --target "$GITHUB_SHA" --title "$TAG" --generate-notes
+            gh release create "$TAG" --draft --target "$GITHUB_SHA" --title "$TAG" --notes-file dist/notes.md
           fi
-          gh release upload "$TAG" .build/distribution/{GitGaze.zip,appcast.xml,SHA256SUMS} --clobber
+          gh release upload "$TAG" dist/GitGaze.zip dist/GitGaze.app.tar.gz dist/GitGaze-windows-x64-setup.exe \
+            dist/GitGaze-windows-arm64-setup.exe dist/appcast.xml dist/latest.json dist/SHA256SUMS --clobber
           gh release edit "$TAG" --draft=false --latest
-      - name: Remove temporary Apple signing credentials
-        if: always()
-        run: |
-          rm -f "$RUNNER_TEMP/certificate.p12"
-          if [ -f "$RUNNER_TEMP/gitgaze-signing.keychain-db" ]; then
-            security delete-keychain "$RUNNER_TEMP/gitgaze-signing.keychain-db"
-          fi

@@ -18,3 +18,7 @@ __pycache__/
 AuthKey_*.p8
 *.mobileprovision
 *.provisionprofile
+node_modules/
+src-tauri/target/
+src-tauri/gen/
+.amp/
