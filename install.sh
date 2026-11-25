@@ -4,11 +4,8 @@
 set -euo pipefail
 REPO="AlexanderHeffernan/Stoke"
 INSTALL_DIR="$HOME/Applications"
-# Asset names follow the product name, so read them from the release rather than hard-coding one.
-ARCHIVE="$(curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 "https://api.github.com/repos/$REPO/releases/latest" \
-    | grep -oE '"name": *"[A-Za-z]+\.zip"' | head -n1 | sed -E 's/.*"([A-Za-z]+\.zip)"/\1/')"
-[ -n "$ARCHIVE" ] || { echo "Couldn't find the latest release" >&2; exit 1; }
-NAME="${ARCHIVE%.zip}"
+NAME=Stoke
+ARCHIVE="$NAME.zip"
 DEST="$INSTALL_DIR/$NAME.app"
 LEGACY="$INSTALL_DIR/GitGaze.app"
 BASE="https://github.com/$REPO/releases/latest/download"

@@ -119,37 +119,11 @@ jobs:
         run: |
           # This commit's script against the published release, in PowerShell 7 and Windows PowerShell 5.1.
           Get-Content ./install.ps1 -Raw | Invoke-Expression
-          $installed = Get-ChildItem "$env:LOCALAPPDATA\GitGaze\GitGaze.exe", "$env:LOCALAPPDATA\Stoke\Stoke.exe" -ErrorAction SilentlyContinue
-          if (-not $installed) { throw 'The app was not installed' }
-          Get-Process GitGaze, Stoke -ErrorAction SilentlyContinue | Stop-Process -Force
+          if (-not (Test-Path "$env:LOCALAPPDATA\Stoke\Stoke.exe")) { throw 'Stoke.exe was not installed' }
+          Get-Process Stoke -ErrorAction SilentlyContinue | Stop-Process -Force
           powershell -NoProfile -ExecutionPolicy Bypass -Command 'Get-Content ./install.ps1 -Raw | Invoke-Expression'
           if ($LASTEXITCODE) { throw "Windows PowerShell install failed ($LASTEXITCODE)" }
-          Get-Process GitGaze, Stoke -ErrorAction SilentlyContinue | Stop-Process -Force
-      - name: Replace an installed GitGaze with this build
-        if: matrix.platform == 'windows'
-        shell: pwsh
-        run: |
-          # Stoke was GitGaze until 1.1.7. Its first launch must remove GitGaze, keep the shared
-          # settings, and carry over launch at login. The previous step left the published app installed.
-          $old = "$env:LOCALAPPDATA\GitGaze\GitGaze.exe"
-          $run = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
-          if (Test-Path $old) {
-            Set-ItemProperty $run -Name GitGaze -Value "`"$old`""
-            New-Item -Force -ItemType Directory "$env:APPDATA\GitGaze" | Out-Null
-            Set-Content "$env:APPDATA\GitGaze\ci-keep.txt" kept
-            Start-Process $old
-            Start-Sleep 3
-            Start-Process (Get-Item dist\*-setup.exe).FullName -ArgumentList '/S' -Wait
-            Start-Process "$env:LOCALAPPDATA\Stoke\Stoke.exe" -ArgumentList '--smoke-test' -Wait
-            for ($i = 0; $i -lt 60 -and (Test-Path $old); $i++) { Start-Sleep 1 }
-            if (Test-Path $old) { throw 'GitGaze was not uninstalled' }
-            if (Test-Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\GitGaze') { throw 'GitGaze is still listed in installed apps' }
-            if ((Get-ItemProperty $run).GitGaze) { throw 'GitGaze still launches at login' }
-            # The autostart plugin writes the machine-wide Run key when the process is elevated, as on CI runners.
-            if (-not ((Get-ItemProperty $run).Stoke -or (Get-ItemProperty ($run -replace '^HKCU', 'HKLM')).Stoke)) { throw 'Stoke does not launch at login' }
-            if (-not (Test-Path "$env:APPDATA\GitGaze\ci-keep.txt")) { throw 'Settings were deleted' }
-            Get-Process GitGaze, Stoke -ErrorAction SilentlyContinue | Stop-Process -Force
-          } else { Write-Host 'The published release is already Stoke; nothing to migrate.' }
+          Get-Process Stoke -ErrorAction SilentlyContinue | Stop-Process -Force
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.platform }}-${{ matrix.arch || 'universal' }}

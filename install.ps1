@@ -4,11 +4,8 @@
 $ErrorActionPreference = 'Stop'
 $repo = 'AlexanderHeffernan/Stoke'
 $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64' -or $env:PROCESSOR_ARCHITEW6432 -eq 'ARM64') { 'arm64' } else { 'x64' }
-# Asset names follow the product name, so read them from the release rather than hard-coding one.
-$release = Invoke-RestMethod -UseBasicParsing "https://api.github.com/repos/$repo/releases/latest"
-$name = $release.assets.name | Where-Object { $_ -match "^[A-Za-z]+-windows-$arch-setup\.exe$" } | Select-Object -First 1
-if (-not $name) { throw "No $arch installer in the latest release" }
-$product = $name -replace '-windows-.*$', ''
+$name = "Stoke-windows-$arch-setup.exe"
+$product = 'Stoke'
 $base = "https://github.com/$repo/releases/latest/download"
 $stage = Join-Path ([IO.Path]::GetTempPath()) ("stoke-" + [guid]::NewGuid())
 New-Item -ItemType Directory -Path $stage | Out-Null
