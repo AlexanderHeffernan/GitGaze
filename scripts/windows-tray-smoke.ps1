@@ -45,8 +45,9 @@ function Open-Tray {
     $item = Find-TrayItem
     if (!$item -or $item.Current.IsOffscreen) {
         $taskbar = [Windows.Automation.AutomationElement]::FromHandle([TraySmoke]::FindWindow('Shell_TrayWnd', $null))
-        $name = [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::NameProperty, 'Show hidden icons')
-        $overflow = $taskbar.FindFirst([Windows.Automation.TreeScope]::Descendants, $name)
+        $overflow = $taskbar.FindAll([Windows.Automation.TreeScope]::Descendants, [Windows.Automation.Condition]::TrueCondition) |
+            Where-Object { $_.Current.Name -match 'hidden icons|notification area overflow' -and !$_.Current.IsOffscreen } |
+            Select-Object -First 1
         if (!$overflow) { throw 'GitGaze is not visible and the Explorer overflow control could not be located' }
         $bounds = $overflow.Current.BoundingRectangle
         Click ($bounds.X + $bounds.Width / 2) ($bounds.Y + $bounds.Height / 2)
@@ -102,7 +103,22 @@ try {
     Write-Host 'PASS: Explorer tray click, WebView2 fixture, foreground focus, Escape dismissal, second open.'
 } catch {
     $app.Refresh()
-    if (!$app.HasExited -and $app.MainWindowHandle -ne [IntPtr]::Zero) { Capture-Flyout $app.MainWindowHandle }
+    if (!$app.HasExited -and $app.MainWindowHandle -ne [IntPtr]::Zero) {
+        Write-Host "GitGaze top-level window: $($app.MainWindowTitle)"
+        $window = [Windows.Automation.AutomationElement]::FromHandle($app.MainWindowHandle)
+        foreach ($child in $window.FindAll([Windows.Automation.TreeScope]::Children, [Windows.Automation.Condition]::TrueCondition)) {
+            if ($child.Current.ProcessId -eq $app.Id) { Write-Host "GitGaze window child: $($child.Current.Name)" }
+        }
+    }
+    Write-Host 'Explorer taskbar buttons:'
+    $taskbarHandle = [TraySmoke]::FindWindow('Shell_TrayWnd', $null)
+    if ($taskbarHandle -ne [IntPtr]::Zero) {
+        $taskbar = [Windows.Automation.AutomationElement]::FromHandle($taskbarHandle)
+        $buttonType = [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::ControlTypeProperty, [Windows.Automation.ControlType]::Button)
+        foreach ($button in $taskbar.FindAll([Windows.Automation.TreeScope]::Descendants, $buttonType)) {
+            Write-Host "  $($button.Current.Name) (offscreen=$($button.Current.IsOffscreen))"
+        }
+    }
     throw
 } finally {
     if (!$app.HasExited) { Stop-Process -Id $app.Id }
