@@ -16,7 +16,7 @@ public struct GitHubClient: Sendable {
     public let token: String
     public init(token: String) { self.token = token }
 
-    public func query(_ query: String, variables: [String: String] = [:]) async throws -> Data {
+    public func query(_ query: String, variables: [String: String] = [:], classifyAccess: Bool = false) async throws -> Data {
         var request = URLRequest(url: URL(string: "https://api.github.com/graphql")!)
         request.httpMethod = "POST"
         request.timeoutInterval = 30
@@ -32,17 +32,21 @@ public struct GitHubClient: Sendable {
         guard let http = response as? HTTPURLResponse else { throw GitHubError.message("GitHub did not respond.") }
         if http.statusCode == 401 { throw GitHubError.classified("Your GitHub CLI session expired. Run gh auth login, then relaunch GitGaze.", code: "access") }
         if http.statusCode == 403 || http.statusCode == 429 {
-            if http.value(forHTTPHeaderField: "x-github-sso")?.lowercased().hasPrefix("required") == true {
+            if classifyAccess, http.value(forHTTPHeaderField: "x-github-sso")?.lowercased().hasPrefix("required") == true {
                 throw GitHubError.classified("GitHub requires organization SSO authorization.", code: "access")
             }
             let limited = http.statusCode == 429 || http.value(forHTTPHeaderField: "x-ratelimit-remaining") == "0" || http.value(forHTTPHeaderField: "retry-after") != nil
-            throw GitHubError.classified(limited ? "GitHub is limiting requests. Try again later." : "GitHub denied access. Check your GitHub CLI authorization.", code: limited ? "rate_limit" : "access")
+            let message = classifyAccess && !limited ? "GitHub denied access. Check your GitHub CLI authorization." :
+                "GitHub is limiting requests. Your saved contributions are still here; try again later."
+            throw GitHubError.classified(message, code: limited ? "rate_limit" : "access")
         }
         guard http.statusCode == 200 else { throw GitHubError.classified("GitHub returned HTTP \(http.statusCode). Try again shortly.", code: http.statusCode >= 500 ? "server" : "unknown") }
         let envelope = try JSONDecoder().decode(ErrorEnvelope.self, from: data)
         if let errors = envelope.errors, let error = errors.first {
             let types = Set(errors.compactMap(\.type))
-            let code = !types.isDisjoint(with: ["FORBIDDEN", "UNAUTHORIZED", "NOT_FOUND", "SAML_ENFORCEMENT", "INSUFFICIENT_SCOPES"]) ? "access" :
+            let denied = !types.isDisjoint(with: ["FORBIDDEN", "UNAUTHORIZED", "NOT_FOUND", "SAML_ENFORCEMENT"]) ||
+                classifyAccess && types.contains("INSUFFICIENT_SCOPES")
+            let code = denied ? "access" :
                 errors.allSatisfy { $0.type == "RATE_LIMITED" } ? "rate_limit" : "unknown"
             throw GitHubError.classified(error.message, code: code)
         }

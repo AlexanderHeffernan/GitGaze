@@ -99,6 +99,28 @@ test('failed viewer verification only keeps the current account’s data on conf
   }
 });
 
+test('opt-out, organization change and account change never request page two of a superseded roster', async () => {
+  for (const invalidate of [s => s.cancel(), s => s.scope('viewer', south.id), s => s.scope('another')]) {
+    const state = leaderboard({ publish() {} });
+    let complete;
+    const issued = [];
+    const pending = state.refresh(context((operation, variables) => {
+      if (operation === 'leaderboardOrganizations') return discovery();
+      issued.push(variables.after);
+      if (!variables.after) return new Promise(resolve => { complete = resolve; });
+      return roster(north, [member('other', 5)], 2);
+    }));
+    while (!complete) await Promise.resolve();
+    await state.refresh(context(good, { at:at + 900_000 })); // routine poll, while the first page is healthy
+    assert.equal(state.snapshot().snapshot, null);
+    invalidate(state);
+    complete(roster(north, [member('viewer', 99)], 2, 'next'));
+    await pending;
+    assert.deepEqual(issued, [null]);
+    assert.equal(state.snapshot().snapshot, null);
+  }
+});
+
 test('scope changes and aborted native responses never publish ranks from the previous request', async () => {
   const state = leaderboard({ publish:() => {} });
   await state.refresh(context(good));

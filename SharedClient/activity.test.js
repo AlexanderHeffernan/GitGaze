@@ -78,6 +78,30 @@ test('extension queries are scoped to a verified refresh and discard results aft
   await assert.rejects(contexts[0].query('profile'), { name: 'AbortError' });
 });
 
+test('section refresh requested during Following is replayed without revoking the same-account scope', async () => {
+  let releaseFollowing, viewers = 0;
+  const contexts = [];
+  const engine = activity({ core, onChange() {}, onVerifiedRefresh: context => contexts.push(context), async request(method, args) {
+    if (method === 'readLocal') return { preferences:{} };
+    if (method !== 'github') return;
+    if (args.operation === 'viewer') {
+      viewers++;
+      return { viewer:{ login:'viewer', contributionsCollection:{ contributionYears:[], contributionCalendar:{ weeks:[] } } } };
+    }
+    return new Promise(resolve => { releaseFollowing = resolve; });
+  } });
+  const start = engine.start();
+  while (!releaseFollowing) await Promise.resolve();
+  await engine.refresh({ force:true, extensionForce:true });
+  await engine.refresh({ force:true, extensionForce:true });
+  assert.equal(viewers, 1);
+  releaseFollowing({ viewer:{ following:{ nodes:[], pageInfo:{ hasNextPage:false } } } });
+  await start;
+  assert.equal(viewers, 2);
+  assert.deepEqual(contexts.map(c => c.extensionForce), [false, true]);
+  assert.equal(contexts[0].signal.aborted, false);
+});
+
 test('an opt-in widget stays in the gallery until enabled and survives restart after enabling', async () => {
   const registry = [{ id:'today' }, { id:'optional-widget', hiddenByDefault:true }];
   let stored = { modules:['today'], hidden:[] };

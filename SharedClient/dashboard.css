@@ -11,7 +11,8 @@ nav, .tools { display:flex; gap:2px; }
 button { font:inherit; color:inherit; background:transparent; border:1px solid transparent; border-radius:6px; cursor:pointer; padding:4px 8px; }
 button:not(:disabled):hover { background:color-mix(in srgb, var(--accent) 12%, transparent); }
 button:disabled { opacity:.35; cursor:default; }
-button:focus-visible, select:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+button:focus-visible, select:focus-visible, .leaderboard-status:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+.visually-hidden { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
 nav button:has(.action-icon) { width:24px; height:24px; display:grid; place-items:center; padding:0; }
 .action-icon { width:16px; height:16px; }
 main { overflow:auto; padding:5px 22px 12px; scrollbar-width:thin; }

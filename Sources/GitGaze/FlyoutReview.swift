@@ -198,7 +198,7 @@ struct FlyoutFixture: Decodable {
             guard let token else {
                 throw GitHubError.classified("No GitHub CLI session found. Run gh auth login --hostname github.com, then try again.", code: "access")
             }
-            let data = try await GitHubClient(token: token).query(query, variables: values.compactMapValues { $0 as? String })
+            let data = try await GitHubClient(token: token).query(query, variables: values.compactMapValues { $0 as? String }, classifyAccess: true)
             guard let envelope = try JSONSerialization.jsonObject(with: data) as? [String: Any], let result = envelope["data"] else {
                 throw GitHubError.message("GitHub did not return activity data.")
             }
@@ -251,7 +251,12 @@ extension AppDelegate {
         let review = try FlyoutReview(mode: "shared", local: local)
         flyoutReview = review
         reviewPopover.animates = false
+        for _ in 0..<12 {
+            if reviewStatusButton?.window != nil { break }
+            try await Task.sleep(for: .milliseconds(150))
+        }
         NSApp.activate(ignoringOtherApps: true)
+        try await Task.sleep(for: .milliseconds(500))
         _ = applicationShouldHandleReopen(NSApp, hasVisibleWindows: false)
         func wait(_ expression: String) async throws {
             for _ in 0..<40 {
@@ -262,6 +267,20 @@ extension AppDelegate {
         }
         func click(_ label: String) async throws {
             _ = try await review.evaluate("document.querySelector('[aria-label=\"\(label)\"]').click(); void 0")
+        }
+        func pressSpace(on label: String) async throws {
+            let selector = "[aria-label=\"\(label)\"]"
+            guard let web = review.view, let window = web.window else { throw GitHubError.message("No review window for \(label) (shown: \(reviewPopover.isShown))") }
+            window.makeFirstResponder(web)
+            _ = try await review.evaluate("document.querySelector('\(selector)').focus(); void 0")
+            try await wait("document.activeElement.matches('\(selector)')")
+            for type in [NSEvent.EventType.keyDown, .keyUp] {
+                guard let event = NSEvent.keyEvent(with: type, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                    windowNumber: window.windowNumber, context: nil, characters: " ", charactersIgnoringModifiers: " ", isARepeat: false, keyCode: 49) else {
+                    throw GitHubError.message("Could not create native Space event")
+                }
+                window.sendEvent(event)
+            }
         }
         func capture(_ name: String) async throws {
             guard let controller = reviewPopover.contentViewController else { throw CocoaError(.fileWriteUnknown) }
@@ -274,26 +293,27 @@ extension AppDelegate {
         guard queries == 0 else { throw GitHubError.message("Hidden widget queried GitHub") }
         try await click("Add widgets")
         try await capture("gallery")
-        try await click("Add Organization leaderboard")
+        try await pressSpace(on: "Add Organization leaderboard")
+        try await wait("document.activeElement.matches('[aria-label=\"Back to dashboard\"]')")
         try await click("Back to dashboard")
         try await wait("document.querySelector('.leaderboard-rank')?.textContent === '#7 of 8 visible members'")
         try await capture("ranked")
         try await click("Show more ranked members")
         try await wait("document.querySelectorAll('.leaderboard-rows li').length === 8 && !!document.querySelector('.leaderboard-you')")
         failure = "network"
-        try await click("Refresh leaderboard")
-        try await wait("!!document.querySelector('.leaderboard-rank') && document.querySelector('.leaderboard-status').textContent.includes('Refreshing leaderboard')")
-        try await wait("!!document.querySelector('.leaderboard-rank') && document.querySelector('.leaderboard-status').textContent.includes('last complete ranking')")
+        try await pressSpace(on: "Refresh leaderboard")
+        try await wait("!!document.querySelector('.leaderboard-rank') && document.activeElement.matches('.leaderboard-status') && document.querySelector('#leaderboard-announcement').textContent.includes('Refreshing organization leaderboard')")
+        try await wait("!!document.querySelector('.leaderboard-rank') && document.activeElement.matches('[aria-label=\"Retry leaderboard\"]') && document.querySelector('#leaderboard-announcement').textContent.includes('last complete ranking')")
         try await capture("stale")
         failure = "access"
-        try await click("Retry leaderboard")
-        try await wait("!document.querySelector('.leaderboard-rank') && document.querySelector('.leaderboard-status').textContent.includes('SSO')")
+        try await pressSpace(on: "Retry leaderboard")
+        try await wait("!document.querySelector('.leaderboard-rank') && document.activeElement.matches('[aria-label=\"Recheck leaderboard access\"]') && document.querySelector('#leaderboard-announcement').textContent.includes('SSO')")
         try await click("Configure Organization leaderboard")
         try await wait("!!document.querySelector('[data-widget=leaderboard] select') && !!document.querySelector('[aria-label=\"Recheck leaderboard access\"]') && !document.querySelector('[aria-label=\"Retry leaderboard\"]')")
         try await capture("access-settings")
         failure = "roster_limit"
-        try await click("Recheck leaderboard access")
-        try await wait("document.querySelector('.leaderboard-status').textContent.includes('500 visible members') && !!document.querySelector('[data-widget=leaderboard] select') && !document.querySelector('.leaderboard-status button')")
+        try await pressSpace(on: "Recheck leaderboard access")
+        try await wait("document.activeElement.matches('.leaderboard-status') && document.querySelector('#leaderboard-announcement').textContent.includes('500 visible members') && !!document.querySelector('[data-widget=leaderboard] select') && !document.querySelector('.leaderboard-status button')")
         try await capture("roster-limit")
         failure = nil
         _ = try await review.evaluate("const selector=document.querySelector('[data-widget=leaderboard] select'); selector.value='south'; selector.dispatchEvent(new Event('change')); void 0")
@@ -303,7 +323,7 @@ extension AppDelegate {
               defaults.integer(forKey: "historyWeeks") == 26, defaults.stringArray(forKey: "hidden")?.contains("leaderboard") == false else {
             throw GitHubError.message("Leaderboard preferences were not persisted without drift")
         }
-        try "WKWebView fixture: opt-in from legacy layout, scoped rank #7/8, expansion, refresh/stale, access clearing + picker, roster limit, switch to tied zeroes, local preferences saved without changing history setting. No GitHub requests.\n"
+        try "WKWebView fixture: opt-in from legacy layout, scoped rank #7/8, expansion, refresh/stale, access clearing + picker, roster limit, switch to tied zeroes, and local preferences saved without changing history setting. Native Space activation and activeElement verified across Add, Refresh, Retry and Recheck; persistent live-region messages verified. No GitHub requests.\n"
             .write(toFile: output + "/leaderboard-check.txt", atomically: true, encoding: .utf8)
     }
 

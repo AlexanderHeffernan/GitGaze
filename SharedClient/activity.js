@@ -11,7 +11,7 @@
   }
 
   function activity({ request, core, onChange, onVerifiedRefresh, onViewerFailure, registry, now = () => new Date() }) {
-    let prefs, dashboard, error, pending = false, attempted = -Infinity, historyAt = -Infinity, followingAt = -Infinity, knownViewer, extension;
+    let prefs, dashboard, error, pending = false, attempted = -Infinity, historyAt = -Infinity, followingAt = -Infinity, knownViewer, extension, queuedExtension, verifying;
     const today = () => core.localDay(now());
     const snapshot = () => ({ today: today(), dashboard, preferences: prefs, live: true,
       status: pending ? 'Refreshing…' : error ? dashboard ? 'Cached activity · refresh failed' : 'Not connected' : dashboard ? 'Updated' : 'Not connected', error });
@@ -21,25 +21,34 @@
 
     async function refresh({ force = false, background = false, extensionForce = false } = {}) {
       const at = +now();
-      if (pending || !force && (background ? at - attempted < 300000 : dashboard && at - +core.cacheTimestamp(dashboard.updatedAt) < 30000)) return;
-      extension?.abort();
+      if (pending) {
+        queuedExtension ||= extensionForce;
+        return;
+      }
+      if (!force && (background ? at - attempted < 300000 : dashboard && at - +core.cacheTimestamp(dashboard.updatedAt) < 30000)) return;
       pending = true; attempted = at; error = undefined; publish();
       let verified = false;
+      let finishVerification;
+      verifying = new Promise(resolve => { finishVerification = resolve; });
       try {
         const profile = readProfile((await query('viewer')).viewer);
         verified = true;
         const matching = dashboard && !core.accountChanged(dashboard, profile.person.login) ? dashboard : null;
         if (knownViewer !== profile.person.login.toLowerCase()) {
+          extension?.abort(); extension = undefined;
           knownViewer = profile.person.login.toLowerCase(); historyAt = followingAt = -Infinity;
         }
+        verifying = undefined; finishVerification();
         dashboard = { profile, history: matching?.history ?? [], historyComplete: matching?.historyComplete ?? false,
           following: matching?.following ?? [], people: matching?.people ?? {}, updatedAt: (+now() - epoch) / 1000 };
         if (onVerifiedRefresh) {
-          extension = new AbortController();
+          extension ??= new AbortController();
           const { signal } = extension;
-          // Check both sides of the native round trip: the transport can finish after the next refresh begins.
-          const scopedQuery = async (operation, variables) => {
+          // Same-account polls keep this scope; switching accounts or losing verification revokes it.
+          const scopedQuery = async (operation, variables, runSignal) => {
+            if (verifying) await verifying;
             signal.throwIfAborted();
+            runSignal?.throwIfAborted();
             if (operation === 'viewer') throw new Error('Extensions cannot renew the GitHub session.');
             try { return await query(operation, variables); }
             finally { signal.throwIfAborted(); }
@@ -81,9 +90,19 @@
         }
       } catch (e) {
         error = e.message;
-        if (!verified) onViewerFailure?.({ at, code: e.code ?? 'unknown' });
+        if (!verified) {
+          extension?.abort(); extension = undefined;
+          verifying = undefined; finishVerification();
+          onViewerFailure?.({ at, code: e.code ?? 'unknown' });
+        }
       }
-      finally { pending = false; publish(); }
+      finally {
+        pending = false;
+        const queued = queuedExtension;
+        queuedExtension = undefined;
+        if (queued) void refresh({ force:true, extensionForce:true });
+        else publish();
+      }
     }
 
     return {

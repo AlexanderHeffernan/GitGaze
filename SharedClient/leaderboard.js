@@ -13,7 +13,7 @@
 
   async function request(context, operation, variables) {
     context.signal.throwIfAborted();
-    const data = await context.query(operation, variables);
+    const data = await context.query(operation, variables, context.signal);
     context.signal.throwIfAborted();
     if (loginKey(data?.viewer?.login) !== loginKey(context.login)) throw failure('access');
     return data;
@@ -78,17 +78,17 @@
   }
 
   function leaderboard({ publish, now = Date.now }) {
-    let state = {}, generation = 0, attempted = -Infinity;
+    let state = {}, active, attempted = -Infinity;
     const update = changes => { state = { ...state, ...changes }; publish(state); };
     function scope(login, selected = null) {
       const account = loginKey(login);
       if (account === state.account && selected === state.selected) return;
-      ++generation; attempted = -Infinity;
+      active?.abort(); active = undefined; attempted = -Infinity;
       if (account !== state.account) state = {};
       update({ account, selected, snapshot:null, error:null, loading:false });
     }
     function cancel() {
-      ++generation;
+      active?.abort(); active = undefined;
       if (state.loading) { attempted = -Infinity; update({ loading:false }); }
     }
     function fail(error) {
@@ -100,23 +100,25 @@
     async function refresh(context, { force = false } = {}) {
       if (context.signal.aborted) return;
       if (loginKey(context.login) !== state.account) scope(context.login);
-      if (!force && !state.loading && context.at - attempted < interval) return;
-      const run = ++generation;
-      const current = () => run === generation && !context.signal.aborted;
-      const abort = () => { if (run === generation) cancel(); };
+      if (!force && (active || context.at - attempted < interval)) return;
+      active?.abort();
+      const run = active = new AbortController();
+      const current = () => active === run && !context.signal.aborted;
+      const abort = () => { if (active === run) cancel(); };
+      const scoped = { ...context, signal:run.signal };
       context.signal.addEventListener('abort', abort, { once:true });
       attempted = context.at;
       update({ loading:true, error:null });
       let discovering = true;
       try {
-        const available = await organizations(context);
+        const available = await organizations(scoped);
         if (!current()) return;
         discovering = false;
         const organization = state.selected ? available.find(org => org.id === state.selected) : available[0];
         update({ organizations:available, selected:state.selected ?? organization?.id ?? null });
         if (state.selected && !organization) throw failure('access');
         if (!organization) { update({ snapshot:null }); return; }
-        const rows = await standings(context, organization);
+        const rows = await standings(scoped, organization);
         if (current()) update({ snapshot:{ rows, updatedAt:now() } });
       } catch (error) {
         if (!current()) return;
@@ -125,7 +127,7 @@
           ...(discovering && !transient.has(code) ? { organizations:null } : {}) });
       } finally {
         context.signal.removeEventListener('abort', abort);
-        if (current()) update({ loading:false });
+        if (current()) { active = undefined; update({ loading:false }); }
       }
     }
     return { scope, refresh, cancel, fail, snapshot:() => state };

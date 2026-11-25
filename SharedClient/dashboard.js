@@ -41,7 +41,7 @@
   let data, prefs, today, stats, page = 'GitGaze', configuring, status = '', error, live;
   const requests = new Map();
   let serial = 0, activity;
-  let leaderboardContext, leaderboardLimit = 5;
+  let leaderboardContext, leaderboardLimit = 5, leaderboardRequested = false;
   const leaderboard = globalThis.gitGazeLeaderboard.leaderboard({ publish:() => { if (prefs) render(); } });
   const leaderboardEnabled = () => prefs && !prefs.hidden.includes('leaderboard');
   function updateLeaderboard(context, force = false) {
@@ -72,7 +72,7 @@
     const wasEnabled = leaderboardEnabled();
     prefs = next;
     if (activity) void activity.setPreferences(next); else post('preferences', next);
-    if (wasEnabled && !leaderboardEnabled()) leaderboard.cancel();
+    if (wasEnabled && !leaderboardEnabled()) { leaderboardRequested = false; leaderboard.cancel(); }
     if (!wasEnabled && leaderboardEnabled()) updateLeaderboard(leaderboardContext);
     render();
   }
@@ -170,14 +170,20 @@
   function leaderboardStatus(state) {
     const { snapshot, loading, error, organizations } = state;
     const panel = group('leaderboard-status');
-    const refreshRank = () => activity && void activity.refresh({ force:true, extensionForce:true });
+    panel.tabIndex = -1;
+    const refreshRank = () => {
+      leaderboardRequested = true;
+      render();
+      void activity.refresh({ force:true, extensionForce:true });
+    };
+    const busy = loading || leaderboardRequested;
     const accessHelp = 'Check gh auth status, confirm organization access (read:org for classic tokens), and authorize GitHub CLI for your organization’s SSO if required. Then refresh.';
     if (snapshot) {
       const time = el('time', 'secondary', `Leaderboard updated ${new Date(snapshot.updatedAt).toLocaleString(undefined, { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })}`);
       time.dateTime = new Date(snapshot.updatedAt).toISOString();
-      panel.append(group('split', time, ...(!loading && !error && activity ? [button('Refresh', 'Refresh leaderboard', refreshRank)] : [])));
+      panel.append(group('split', time, ...(!busy && !error && activity ? [button('Refresh', 'Refresh leaderboard', refreshRank)] : [])));
     }
-    if (loading) panel.append(text(snapshot ? 'Refreshing leaderboard…' : organizations ? 'Ranking visible members…' : 'Finding organizations…'));
+    if (busy) panel.append(text(loading ? snapshot ? 'Refreshing leaderboard…' : organizations ? 'Ranking visible members…' : 'Finding organizations…' : 'Waiting to refresh leaderboard…'));
     else if (error) {
       const messages = { access:'Your GitHub CLI session can’t access this organization or roster.',
         roster_limit:`This organization exceeds the limit of ${globalThis.gitGazeLeaderboard.memberLimit} visible members. Choose a smaller organization in widget settings.`,
@@ -300,7 +306,9 @@
 
   function render() {
     const oldOffset = main.scrollTop;
-    const oldControl = document.activeElement?.getAttribute('aria-label');
+    const oldFocus = document.activeElement;
+    const oldControl = oldFocus?.getAttribute('aria-label');
+    const rankFocus = oldFocus?.closest('.leaderboard-status');
     const actions = $('actions');
     $('title').textContent = page;
     document.documentElement.dataset.mode = prefs.appearance;
@@ -325,7 +333,17 @@
     }
     $('account').textContent = data ? '@' + data.profile.person.login : '';
     $('status').textContent = status;
-    if (oldControl) [...document.querySelectorAll('button')].find(b => !b.disabled && b.getAttribute('aria-label') === oldControl)?.focus({ preventScroll:true });
+    const statusPanel = main.querySelector('.leaderboard-status');
+    const matchingControl = oldControl && [...document.querySelectorAll('button')].find(b => !b.disabled && b.getAttribute('aria-label') === oldControl);
+    const nextFocus = matchingControl || (rankFocus && (statusPanel?.querySelector('button') || statusPanel)) ||
+      (oldControl === 'Add Organization leaderboard' && $('actions').querySelector('button'));
+    if (nextFocus) nextFocus.focus({ preventScroll:true });
+    const announcement = $('leaderboard-announcement');
+    const state = leaderboard.snapshot();
+    const message = !leaderboardEnabled() ? '' : leaderboardRequested ? 'Waiting to refresh leaderboard.' :
+      state.loading ? 'Refreshing organization leaderboard.' : state.error ? `Leaderboard: ${statusPanel?.textContent || 'refresh failed.'}` :
+      state.snapshot ? 'Organization leaderboard updated.' : state.organizations?.length === 0 ? 'No visible organizations.' : '';
+    if (announcement.textContent !== message) announcement.textContent = message;
     main.scrollTop = oldOffset;
   }
 
@@ -347,9 +365,11 @@
         leaderboardContext = context;
         if (leaderboard.snapshot().account && leaderboard.snapshot().account !== context.login.toLowerCase()) leaderboard.scope(context.login,
           prefs.leaderboardOrganization?.account === context.login.toLowerCase() ? prefs.leaderboardOrganization.id : null);
+        if (context.extensionForce) leaderboardRequested = false;
         updateLeaderboard(context, context.extensionForce);
       }, onViewerFailure: failure => {
         leaderboardContext = undefined;
+        leaderboardRequested = false;
         leaderboard.fail(failure);
       } });
     void activity.start();
