@@ -14,6 +14,7 @@ internal sealed class Tray : IDisposable
     private IntPtr icon;
     private string tooltip = "GitGaze";
     private bool added;
+    public string? RegistrationFailure { get; private set; }
     public event Action<int, int, int>? Command;
 
     public Tray() => host.AddHook(WindowMessage);
@@ -35,11 +36,13 @@ internal sealed class Tray : IDisposable
         data.Tip = tooltip;
         if (added && Shell_NotifyIcon(Modify, ref data)) return true;
         added = Shell_NotifyIcon(Add, ref data);
+        RegistrationFailure = added ? null : "Explorer rejected NIM_ADD.";
         if (added)
         {
             data.Version = 4;
             if (!Shell_NotifyIcon(SetVersion, ref data))
             {
+                RegistrationFailure = "Explorer rejected NOTIFYICON_VERSION_4.";
                 Shell_NotifyIcon(Delete, ref data);
                 added = false;
             }

@@ -34,7 +34,7 @@ internal static class Program
         }
         if (!tray.SetIcon(bitmap, "GitGaze · Shared-client review"))
         {
-            MessageBox.Show("Could not register GitGaze in the Windows notification area.", "GitGaze");
+            MessageBox.Show($"Could not register GitGaze in the Windows notification area. {tray.RegistrationFailure}", "GitGaze");
             return 1;
         }
         var fixture = args.Contains("--fixture") ? JsonNode.Parse(File.ReadAllText(Path.Combine(assets, "fixture.json")))!.AsObject() : null;
