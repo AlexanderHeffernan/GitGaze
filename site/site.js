@@ -111,9 +111,10 @@ function render() {
 function place() {
   const box = stage.getBoundingClientRect();
   const zoom = parseFloat(stage.style.zoom) || 1;
-  const width = box.width / zoom;
+  const width = stage.clientWidth;
   const item = (platform === 'macos' ? $('#menu-item') : $('#tray-item')).getBoundingClientRect();
-  const center = (item.left + item.width / 2 - box.left) / zoom;
+  // Positions are relative to the stage's padding box, inside its border.
+  const center = (item.left + item.width / 2 - box.left) / zoom - stage.clientLeft;
   const left = Math.max(8, Math.min(width - 392, center - 192));
   stage.style.setProperty('--pop-x', `${left}px`);
   const burstLeft = Math.max(0, Math.min(width - 440, center - 220));
