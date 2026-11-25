@@ -10,8 +10,8 @@
       totalContributions: contributionCalendar.totalContributions, days: contributionCalendar.weeks.flatMap(w => w.contributionDays) };
   }
 
-  function activity({ request, core, onChange, now = () => new Date() }) {
-    let prefs, dashboard, error, pending = false, attempted = -Infinity, historyAt = -Infinity, followingAt = -Infinity, knownViewer;
+  function activity({ request, core, onChange, onVerifiedRefresh, now = () => new Date() }) {
+    let prefs, dashboard, error, pending = false, attempted = -Infinity, historyAt = -Infinity, followingAt = -Infinity, knownViewer, extension;
     const today = () => core.localDay(now());
     const snapshot = () => ({ today: today(), dashboard, preferences: prefs, live: true,
       status: pending ? 'Refreshing…' : error ? dashboard ? 'Cached activity · refresh failed' : 'Not connected' : dashboard ? 'Updated' : 'Not connected', error });
@@ -22,6 +22,7 @@
     async function refresh({ force = false, background = false } = {}) {
       const at = +now();
       if (pending || !force && (background ? at - attempted < 300000 : dashboard && at - +core.cacheTimestamp(dashboard.updatedAt) < 30000)) return;
+      extension?.abort();
       pending = true; attempted = at; error = undefined; publish();
       try {
         const profile = readProfile((await query('viewer')).viewer);
@@ -32,6 +33,19 @@
         dashboard = { profile, history: matching?.history ?? [], historyComplete: matching?.historyComplete ?? false,
           following: matching?.following ?? [], people: matching?.people ?? {}, updatedAt: (+now() - epoch) / 1000 };
         publish();
+        if (onVerifiedRefresh) {
+          extension = new AbortController();
+          const { signal } = extension;
+          // Check both sides of the native round trip: the transport can finish after the next refresh begins.
+          const scopedQuery = async (operation, variables) => {
+            signal.throwIfAborted();
+            if (operation === 'viewer') throw new Error('Extensions cannot renew the GitHub session.');
+            try { return await query(operation, variables); }
+            finally { signal.throwIfAborted(); }
+          };
+          Promise.resolve().then(() => onVerifiedRefresh({ login: profile.person.login, at, signal, query: scopedQuery }))
+            .catch(e => { if (!signal.aborted) console.error('Activity extension refresh failed', e); });
+        }
         await cache();
         if (at - historyAt >= 21600000) {
           const history = [];

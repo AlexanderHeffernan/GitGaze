@@ -278,6 +278,8 @@ extension AppDelegate {
                 try await review.capture(controller, to: output + "/shared-widget-settings.png")
                 let restored = try await review.evaluate("const input=document.activeElement;input.value='26';input.dispatchEvent(new Event('change'));document.activeElement.getAttribute('aria-label')") as? String
                 try require(restored == "Configure Contribution history", "Selection must restore focus")
+                await settle()
+                try await review.capture(controller, to: output + "/shared-six-months.png")
                 _ = try await review.evaluate("document.activeElement.click();document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}));void 0")
                 let escaped = try await review.evaluate("document.activeElement.getAttribute('aria-label')") as? String
                 try require(escaped == "Configure Contribution history", "Escape must restore focus")

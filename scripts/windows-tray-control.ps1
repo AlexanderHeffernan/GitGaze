@@ -44,3 +44,4 @@ if ($shell -ne [IntPtr]::Zero) {
     $buttons = $taskbar.FindAll([Windows.Automation.TreeScope]::Descendants, $type)
     "Control shell state: taskbar accessibility buttons=$($buttons.Count)"
 }
+if (!$added) { throw 'Desktop precondition failed: independent NIM_ADD returned False; app tray smoke not run.' }

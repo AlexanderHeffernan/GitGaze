@@ -50,3 +50,30 @@ test('offline cache survives, then a verified switch never carries the old histo
   await engine.refresh({ background: true });
   assert.equal(viewers, 3);
 });
+
+test('extension queries are scoped to a verified refresh and discard results after an account switch', async () => {
+  let login = 'first-account', release;
+  const contexts = [], profile = {
+    name: null, avatarUrl: 'https://example.invalid/avatar', contributionsCollection: {
+      contributionYears: [], restrictedContributionsCount: 0, contributionCalendar: { totalContributions: 0, weeks: [] }
+    }
+  };
+  const engine = activity({ core, onChange() {}, onVerifiedRefresh: context => contexts.push(context), async request(method, args) {
+    if (method === 'readLocal') return { preferences: {} };
+    if (method !== 'github') return;
+    if (args.operation === 'viewer') return { viewer: { ...profile, login } };
+    if (args.operation === 'following') return { viewer: { following: { nodes: [], pageInfo: { hasNextPage: false } } } };
+    return new Promise(resolve => { release = resolve; });
+  } });
+  await engine.start();
+  assert.equal(contexts[0].login, 'first-account');
+  await assert.rejects(contexts[0].query('viewer'), /cannot renew/);
+  const lateResult = assert.rejects(contexts[0].query('profile', { login: 'first-account' }), { name: 'AbortError' });
+  login = 'second-account';
+  await engine.refresh({ force: true });
+  assert.equal(contexts[1].login, 'second-account');
+  assert.equal(contexts[0].signal.aborted, true);
+  release({ user: { login: 'first-account' } });
+  await lateResult;
+  await assert.rejects(contexts[0].query('profile'), { name: 'AbortError' });
+});

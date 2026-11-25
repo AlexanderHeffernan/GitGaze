@@ -89,8 +89,12 @@
 
   function heatmap() {
     const weeks = prefs.historyWeeks, start = core.offset(today, -(weeks - 1) * 7 - core.weekday(today));
-    const graph = svg('svg', { class:'heat', viewBox:`0 0 ${weeks * 6} 42`, role:'img', 'aria-label':`${weeks}-week contribution graph` });
-    const label = text(start.slice(0, 7));
+    const graph = el('div', 'heat');
+    graph.dataset.weeks = weeks;
+    graph.setAttribute('role', 'img');
+    graph.setAttribute('aria-label', `${weeks}-week contribution graph`);
+    const firstMonth = core.offset(today, -(weeks - 1) * 7).slice(0, 7);
+    const label = text(firstMonth), end = text('Today');
     const days = new Map(data.profile.days.map(d => [d.date, d]));
     const colours = ['#9be9a8 #0e4429', '#40c463 #006d32', '#30a14e #26a641', '#216e39 #39d353'];
     for (let i = 0; i < weeks * 7; i++) {
@@ -98,12 +102,14 @@
       if (date > today) break;
       const day = days.get(date), count = day?.contributionCount ?? 0;
       const level = count ? (colours.findIndex(pair => pair.split(' ').includes(day.color?.toLowerCase())) + 1 || Math.min(4, Math.floor(count / 5) + 1)) : 0;
-      const cell = svg('rect', { x:Math.floor(i / 7) * 6, y:i % 7 * 6, width:4.5, height:4.5, rx:1, class:level ? 'cell' : 'empty', opacity:[1,.22,.42,.67,1][level] });
-      cell.addEventListener('pointerenter', () => label.textContent = `${count} contributions · ${date}`);
+      const cell = el('span');
+      cell.dataset.level = level;
+      cell.addEventListener('pointerenter', () => { label.textContent = `${count} contributions · ${date}`; end.hidden = true; });
       graph.append(cell);
     }
-    graph.addEventListener('pointerleave', () => label.textContent = start.slice(0, 7));
-    return group('', group('split', text(num(data.profile.totalContributions), 'large'), text('past year')), graph, group('split', label, text('Today')));
+    graph.addEventListener('pointerleave', () => { label.textContent = firstMonth; end.hidden = false; });
+    return group('', group('heat-total', text(num(data.profile.totalContributions), 'large'), text('past year')),
+      group('heat-calendar', graph, group('split heat-dates', label, end)));
   }
 
   function select(label, values, current, onChange) {

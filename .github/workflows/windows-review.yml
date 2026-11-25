@@ -1,5 +1,11 @@
 name: Shared client review
 on:
+  workflow_dispatch:
+    inputs:
+      desktop_probe:
+        description: Run the ARM64 desktop diagnostics on a newly qualified image
+        type: boolean
+        default: false
   push:
     branches: [windows-shared-client]
   pull_request:
@@ -27,7 +33,7 @@ jobs:
           node-version: '24'
       - run: node --test SharedClient/core.test.js SharedClient/activity.test.js
       - name: Probe hosted Explorer desktop capability (not an app test)
-        if: matrix.arch == 'arm64' && github.event_name == 'push'
+        if: matrix.arch == 'arm64' && inputs.desktop_probe == true
         timeout-minutes: 1
         shell: pwsh
         run: |
@@ -82,14 +88,14 @@ jobs:
           name: GitGaze-shared-review-win-${{ matrix.arch }}
           path: payload
       - name: Exercise packaged ARM64 flyout on the Explorer desktop
-        if: matrix.arch == 'arm64' && github.event_name == 'push'
+        if: matrix.arch == 'arm64' && inputs.desktop_probe == true
         timeout-minutes: 3
         shell: pwsh
         run: |
           scripts/windows-tray-control.ps1
           scripts/windows-tray-smoke.ps1 -Exe payload/GitGaze.exe -Evidence desktop-evidence
       - uses: actions/upload-artifact@v4
-        if: ${{ always() && matrix.arch == 'arm64' && github.event_name == 'push' }}
+        if: ${{ always() && matrix.arch == 'arm64' && inputs.desktop_probe == true }}
         with:
           name: GitGaze-arm64-desktop-evidence
           path: desktop-evidence

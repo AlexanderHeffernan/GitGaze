@@ -38,9 +38,20 @@ section:hover .tools, section:focus-within .tools, .tools.active { opacity:1; }
 .mark { background:color-mix(in srgb, currentColor 7%, transparent); border-radius:4px; width:6px; height:16px; }
 .mark.active { background:var(--accent); }
 .mark:last-child { height:22px; box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--accent) 70%, transparent); }
-.heat { width:100%; display:block; margin:8px 0 4px; color:var(--accent); }
-.cell { fill:currentColor; }
-.empty { fill:var(--edge); }
+.heat-total { display:flex; align-items:baseline; gap:6px; }
+.heat-total .large { font-size:24px; font-weight:500; }
+.heat-calendar { height:59px; display:flex; flex-direction:column; justify-content:space-between; margin-top:8px; }
+.heat-calendar:has([data-weeks='26']) { height:94px; }
+.heat { display:grid; grid-auto-flow:column; grid-template-columns:repeat(53, minmax(0, 1fr)); grid-template-rows:repeat(7, max-content); row-gap:1.7px; }
+.heat[data-weeks='26'] { grid-template-columns:repeat(26, minmax(0, 1fr)); }
+.heat span { width:clamp(1px, calc(100% - 1.7px), 4.44px); aspect-ratio:1; border-radius:1.2px; background:var(--accent); }
+.heat[data-weeks='26'] span { width:clamp(1px, calc(100% - 1.7px), 9.44px); }
+.heat span:hover { outline:.7px solid color-mix(in srgb, var(--text) 65%, transparent); outline-offset:.4px; }
+.heat span[data-level='0'] { background:color-mix(in srgb, var(--text) 6%, transparent); }
+.heat span[data-level='1'] { background:color-mix(in srgb, var(--accent) 22%, transparent); }
+.heat span[data-level='2'] { background:color-mix(in srgb, var(--accent) 42%, transparent); }
+.heat span[data-level='3'] { background:color-mix(in srgb, var(--accent) 67%, transparent); }
+.heat-dates .secondary { font-size:8px; }
 .option { color:var(--muted); display:flex; justify-content:space-between; gap:6px; align-items:center; min-height:34px; }
 select { color:inherit; background:var(--bg); border:1px solid var(--edge); border-radius:5px; padding:4px; }
 footer { min-height:28px; padding:4px 22px; border-top:1px solid var(--edge); color:var(--muted); font-size:10px; }
