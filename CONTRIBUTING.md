@@ -28,7 +28,7 @@ For visual changes, check light and dark appearance and states such as empty act
 
 ## Marketing site
 
-`site/` is the complete static site. No build or hosting configuration is required. To preview it from the checkout:
+`site/` is the complete static site; `site/app` links to `ui/`, so the hero demo runs the real app UI with its sample data. There is no build step. To preview it from the checkout:
 
 ```sh
 python3 -m http.server --directory site 8000
@@ -43,7 +43,9 @@ npm install --prefix "$tools" playwright@1.58.2 axe-core@4.14.1
 NODE_PATH="$tools/node_modules" node scripts/check-site.cjs
 ```
 
-On Linux, add `--with-deps` to the Playwright install command if browser libraries are missing. The check covers responsive reflow, keyboard navigation, clipboard behaviour, no-JavaScript installation instructions, and automated accessibility in Chromium and touch-emulated WebKit. Serve the site through localhost or HTTPS for clipboard access.
+On Linux, add `--with-deps` to the Playwright install command if browser libraries are missing. The check covers responsive reflow, automated accessibility in Chromium and touch-emulated WebKit, the live demo (palettes, popover placement, celebrations, the Windows variant), clipboard copy, and no-JavaScript install instructions.
+
+Merged changes to `main` go live at <https://gitgaze.alexheffernan.dev> within about a minute; see [deploy/site/README.md](deploy/site/README.md).
 
 ## Protect private information
 

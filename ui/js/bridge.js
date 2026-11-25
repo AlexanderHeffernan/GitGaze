@@ -18,6 +18,7 @@ export function listen(event, handler) {
 }
 /** Preview only: delivers an event as the native shell would. */
 export const emitLocal = (event, payload) => handlers.get(event)?.forEach(handler => handler(payload));
+if (!native) globalThis.gitgazeEmit = emitLocal; // Lets the website demo drive an embedded celebration.
 
 export const plugin = name => (native ? tauri[name] : undefined);
 
@@ -86,6 +87,7 @@ async function preview(command, args) {
     case 'set_launch_at_login': return args.enabled;
     case 'load_state': return { preferences: previewPrefs ?? { modules: ['today', 'streak', 'heatmap', 'favourites', 'leaderboard'], hidden: ['records', 'people', 'years'], favourites: ['torvalds', 'gaearon', 'yyx990803'] }, migrated: false, cache: null };
     case 'save_preferences': previewPrefs = args.preferences; return null;
+    case 'celebrate': if (parent !== window) parent.postMessage({ gitgaze: 'celebrate', args }, location.origin); return null;
     case 'github_query': {
       const { query, variables } = args;
       if (query.includes('organizations(')) return { viewer: { organizations: { nodes: [{ id: 'O_1', login: 'acme', name: 'Acme Labs', avatarUrl: '' }, { id: 'O_2', login: 'octo-collective', name: 'Octo Collective', avatarUrl: '' }] } } };

@@ -1,0 +1,6 @@
+[Unit]
+Description=Publish the GitGaze site from main
+
+[Service]
+Type=oneshot
+ExecStart=%h/gitgaze-site/repo/deploy/site/update.sh
