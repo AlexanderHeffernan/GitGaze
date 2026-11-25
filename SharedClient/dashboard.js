@@ -41,6 +41,19 @@
   let data, prefs, today, stats, page = 'GitGaze', configuring, status = '', error, live;
   const requests = new Map();
   let serial = 0, activity;
+  let leaderboardContext, leaderboardLimit = 5;
+  const leaderboard = globalThis.gitGazeLeaderboard.leaderboard({ publish:() => { if (prefs) render(); } });
+  const leaderboardEnabled = () => prefs && !prefs.hidden.includes('leaderboard');
+  function updateLeaderboard(context, force = false) {
+    if (!leaderboardEnabled() || !context || context.signal.aborted) return;
+    const account = context.login.toLowerCase();
+    if (leaderboard.snapshot().account !== account) {
+      leaderboardLimit = 5;
+      const selection = prefs.leaderboardOrganization;
+      leaderboard.scope(account, selection?.account === account ? selection.id : null);
+    }
+    void leaderboard.refresh(context, { force });
+  }
 
   window.gitGazeReply = ({ id, result, error, code }) => {
     const request = requests.get(id);
@@ -55,7 +68,14 @@
     post('request', { version:1, id, method, args:args ?? null });
   });
 
-  function change(next) { prefs = next; if (activity) void activity.setPreferences(next); else post('preferences', next); render(); }
+  function change(next) {
+    const wasEnabled = leaderboardEnabled();
+    prefs = next;
+    if (activity) void activity.setPreferences(next); else post('preferences', next);
+    if (wasEnabled && !leaderboardEnabled()) leaderboard.cancel();
+    if (!wasEnabled && leaderboardEnabled()) updateLeaderboard(leaderboardContext);
+    render();
+  }
   function flip(key, open) {
     configuring = open ? key : undefined;
     render();
@@ -145,6 +165,84 @@
       text(`${num(stats.lastWeekTotal)} last week`, 'secondary previous-week')), chart);
   }
 
+  function leaderboardStatus(state) {
+    const { snapshot, loading, error, organizations } = state;
+    const panel = group('leaderboard-status');
+    const refreshRank = () => activity && void activity.refresh({ force:true, extensionForce:true });
+    const accessHelp = 'Check gh auth status, confirm organization access (read:org for classic tokens), and authorize GitHub CLI for your organization’s SSO if required. Then refresh.';
+    if (snapshot) {
+      const time = el('time', 'secondary', `Leaderboard updated ${new Date(snapshot.updatedAt).toLocaleString(undefined, { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })}`);
+      time.dateTime = new Date(snapshot.updatedAt).toISOString();
+      panel.append(group('split', time, ...(!loading && !error && activity ? [button('Refresh', 'Refresh leaderboard', refreshRank)] : [])));
+    }
+    if (loading) panel.append(text(snapshot ? 'Refreshing leaderboard…' : organizations ? 'Ranking visible members…' : 'Finding organizations…'));
+    else if (error) {
+      const messages = { access:'Your GitHub CLI session can’t access this organization or roster.',
+        roster_limit:`This organization exceeds the limit of ${globalThis.gitGazeLeaderboard.memberLimit} visible members. Choose a smaller organization in widget settings.`,
+        rate_limit:'GitHub is limiting requests. Try again later.', network:'GitHub couldn’t be reached.', server:'GitHub is temporarily unavailable.',
+        incomplete:'GitHub didn’t return a complete visible roster. No ranking is shown.', unknown:'GitGaze couldn’t verify the leaderboard response. No ranking is shown.' };
+      panel.append(text(messages[error], 'secondary record'));
+      if (error === 'access') {
+        panel.append(text(accessHelp));
+        if (activity) panel.append(button('Recheck access', 'Recheck leaderboard access', refreshRank));
+      }
+      if (['network', 'server', 'rate_limit'].includes(error)) {
+        if (snapshot) panel.append(text('Showing the last complete ranking.'));
+        if (activity) panel.append(button('Try again', 'Retry leaderboard', refreshRank));
+      }
+    } else if (organizations?.length === 0) panel.append(text('No organizations are visible to this GitHub CLI session.'), text(accessHelp));
+    else if (!snapshot) panel.append(text('Connect an eligible GitHub CLI session to rank organization members.'));
+    return panel;
+  }
+
+  function leaderboardCard(gallery) {
+    if (gallery) return text('Compare visible contribution activity within an organization.');
+    const state = leaderboard.snapshot();
+    const organization = state.organizations?.find(org => org.id === state.selected);
+    const body = group('leaderboard', ...(organization ? [text(organization.login, 'leaderboard-org')] : []), leaderboardStatus(state));
+    const rows = state.snapshot?.rows;
+    if (!rows) return body;
+    if (!rows.length) { body.append(text('GitHub returned no visible members to rank.')); return body; }
+    const viewer = rows.find(row => row.login.toLowerCase() === state.account);
+    body.append(viewer ? group('leaderboard-place split', group('', text('YOUR PLACE'),
+      text(`#${num(viewer.rank)} of ${num(rows.length)} visible members`, 'leaderboard-rank')), text(`${num(viewer.count)} contributions`)) :
+      text('Your account isn’t in the visible roster, so no personal rank is available.'));
+    body.append(text('Last 30 days · commits, issues, PRs and reviews. Only members and activity visible to your GitHub CLI session count.'));
+    if (rows[0].count === 0) body.append(text('No visible activity in this period. All ranked members are tied.'));
+    const list = el('ol', 'leaderboard-rows'); list.setAttribute('aria-label', 'Visible member rankings');
+    for (const row of rows.slice(0, leaderboardLimit)) {
+      const item = el('li');
+      const initial = el('span', 'leaderboard-avatar', (row.name || row.login).slice(0, 1).toUpperCase());
+      initial.setAttribute('aria-hidden', 'true');
+      const name = text(row.name || row.login, 'leaderboard-name'); name.title = `@${row.login}`;
+      item.append(text(`#${num(row.rank)}`), initial, name);
+      if (row === viewer) item.append(text('You', 'leaderboard-you'));
+      item.append(text(num(row.count), 'leaderboard-count')); list.append(item);
+    }
+    body.append(list);
+    if (rows.length > leaderboardLimit) body.append(button(`Show more (${num(rows.length - leaderboardLimit)} remaining)`, 'Show more ranked members', () => {
+      leaderboardLimit += 10; render();
+    }));
+    return body;
+  }
+
+  function leaderboardSettings() {
+    const state = leaderboard.snapshot();
+    const body = group('leaderboard', leaderboardStatus(state));
+    if (state.organizations?.length) {
+      const options = state.organizations.map(org => [org.id, org.login]);
+      if (!options.some(([id]) => id === state.selected)) options.unshift(['', 'Choose an organization']);
+      body.prepend(select('Organization', options, options.some(([id]) => id === state.selected) ? state.selected : '', id => {
+        if (!id || !leaderboardContext || leaderboardContext.signal.aborted) return;
+        leaderboardLimit = 5;
+        change({ ...prefs, leaderboardOrganization:{ account:state.account, id } });
+        leaderboard.scope(state.account, id);
+        updateLeaderboard({ ...leaderboardContext, at:Date.now() }, true);
+      }));
+    }
+    return body;
+  }
+
   const widgets = {
     today: { title:'Today', face:todayCard },
     streak: { title:'Streak', face:streakCard, settings:() => select('Reminder hour', Array.from({ length:24 }, (_, i) => [i, `${String(i).padStart(2, '0')}:00`]), prefs.reminderHour, h => change({ ...prefs, reminderHour:Number(h) })) },
@@ -164,7 +262,8 @@
     years: { title:'Year in perspective', face:() => {
       const year = Number(today.slice(0, 4)), older = prefs.comparisonYear || year - 1;
       return group('split', text(`${num(stats.yearTotal)} in ${year}`, 'large'), text(`${num(stats.totalInYear(older, prefs.comparisonMode === 'full' ? undefined : today.slice(5)))} in ${older}`));
-    } }
+    } },
+    leaderboard: { title:'Organization leaderboard', hiddenByDefault:true, face:leaderboardCard, settings:leaderboardSettings }
   };
   const registry = Object.entries(widgets).map(([id, widget], index) => ({ id, hiddenByDefault: widget.hiddenByDefault ?? index >= 4 }));
 
@@ -193,7 +292,7 @@
     if (gallery || openSettings) tools.classList.add('active');
     const panel = section.querySelector('.face');
     if (openSettings) panel.classList.add('flipping');
-    panel.append(openSettings ? settings() : face());
+    panel.append(openSettings ? settings() : face(gallery));
     return section;
   }
 
@@ -241,7 +340,16 @@
   window.gitGazeOpen = () => navigate('GitGaze');
   window.gitGazeStart = () => {
     if (window !== window.top || activity) return;
-    activity = globalThis.gitGazeActivity({ request, core, registry, onChange:window.gitGazeReceive });
+    activity = globalThis.gitGazeActivity({ request, core, registry, onChange:window.gitGazeReceive,
+      onVerifiedRefresh: context => {
+        leaderboardContext = context;
+        if (leaderboard.snapshot().account && leaderboard.snapshot().account !== context.login.toLowerCase()) leaderboard.scope(context.login,
+          prefs.leaderboardOrganization?.account === context.login.toLowerCase() ? prefs.leaderboardOrganization.id : null);
+        updateLeaderboard(context, context.extensionForce);
+      }, onViewerFailure: failure => {
+        leaderboardContext = undefined;
+        leaderboard.fail(failure);
+      } });
     void activity.start();
     setInterval(() => void activity.refresh({ background:true }), 30000);
   };

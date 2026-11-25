@@ -32,14 +32,17 @@ public struct GitHubClient: Sendable {
         guard let http = response as? HTTPURLResponse else { throw GitHubError.message("GitHub did not respond.") }
         if http.statusCode == 401 { throw GitHubError.classified("Your GitHub CLI session expired. Run gh auth login, then relaunch GitGaze.", code: "access") }
         if http.statusCode == 403 || http.statusCode == 429 {
+            if http.value(forHTTPHeaderField: "x-github-sso")?.lowercased().hasPrefix("required") == true {
+                throw GitHubError.classified("GitHub requires organization SSO authorization.", code: "access")
+            }
             let limited = http.statusCode == 429 || http.value(forHTTPHeaderField: "x-ratelimit-remaining") == "0" || http.value(forHTTPHeaderField: "retry-after") != nil
-            throw GitHubError.classified("GitHub is limiting requests. Your saved contributions are still here; try again later.", code: limited ? "rate_limit" : "access")
+            throw GitHubError.classified(limited ? "GitHub is limiting requests. Try again later." : "GitHub denied access. Check your GitHub CLI authorization.", code: limited ? "rate_limit" : "access")
         }
         guard http.statusCode == 200 else { throw GitHubError.classified("GitHub returned HTTP \(http.statusCode). Try again shortly.", code: http.statusCode >= 500 ? "server" : "unknown") }
         let envelope = try JSONDecoder().decode(ErrorEnvelope.self, from: data)
         if let errors = envelope.errors, let error = errors.first {
             let types = Set(errors.compactMap(\.type))
-            let code = !types.isDisjoint(with: ["FORBIDDEN", "UNAUTHORIZED", "NOT_FOUND", "SAML_ENFORCEMENT"]) ? "access" :
+            let code = !types.isDisjoint(with: ["FORBIDDEN", "UNAUTHORIZED", "NOT_FOUND", "SAML_ENFORCEMENT", "INSUFFICIENT_SCOPES"]) ? "access" :
                 errors.allSatisfy { $0.type == "RATE_LIMITED" } ? "rate_limit" : "unknown"
             throw GitHubError.classified(error.message, code: code)
         }

@@ -19,7 +19,7 @@
     const cache = async () => { await request('writeCache', dashboard); };
     const query = (operation, variables = {}) => request('github', { operation, variables });
 
-    async function refresh({ force = false, background = false } = {}) {
+    async function refresh({ force = false, background = false, extensionForce = false } = {}) {
       const at = +now();
       if (pending || !force && (background ? at - attempted < 300000 : dashboard && at - +core.cacheTimestamp(dashboard.updatedAt) < 30000)) return;
       extension?.abort();
@@ -34,7 +34,6 @@
         }
         dashboard = { profile, history: matching?.history ?? [], historyComplete: matching?.historyComplete ?? false,
           following: matching?.following ?? [], people: matching?.people ?? {}, updatedAt: (+now() - epoch) / 1000 };
-        publish();
         if (onVerifiedRefresh) {
           extension = new AbortController();
           const { signal } = extension;
@@ -45,9 +44,12 @@
             try { return await query(operation, variables); }
             finally { signal.throwIfAborted(); }
           };
-          Promise.resolve().then(() => onVerifiedRefresh({ login: profile.person.login, at, signal, query: scopedQuery }))
+          Promise.resolve().then(() => onVerifiedRefresh({ login: profile.person.login, at, signal, query: scopedQuery, extensionForce }))
             .catch(e => { if (!signal.aborted) console.error('Activity extension refresh failed', e); });
+          // Give extensions a chance to synchronously clear old-account state before rendering.
+          await Promise.resolve();
         }
+        publish();
         await cache();
         if (at - historyAt >= 21600000) {
           const history = [];

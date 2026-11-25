@@ -113,6 +113,7 @@ struct FlyoutFixture: Decodable {
     let cache: URL
     let defaults: UserDefaults
     let credentials: Bool
+    var reviewResponse: (@MainActor (String, [String: Any]) async throws -> Any)?
     private var token: String?
 
     init(cache: URL, defaults: UserDefaults, credentials: Bool = true) {
@@ -122,9 +123,28 @@ struct FlyoutFixture: Decodable {
     }
 
     private static let keys = ["modules", "hidden", "favourites", "favouriteOrder", "palette", "customLight", "customDark", "menuStyle", "menuStreak",
-        "appearance", "notifications", "visualCelebrations", "celebrationStyle", "streakReminder", "reminderHour", "lastReminderDay", "detectPushes", "historyWeeks", "comparisonYear", "comparisonMode"]
+        "appearance", "notifications", "visualCelebrations", "celebrationStyle", "streakReminder", "reminderHour", "lastReminderDay", "detectPushes", "historyWeeks", "comparisonYear", "comparisonMode", "leaderboardOrganization"]
+    private static func login(_ value: Any?) -> Bool {
+        (value as? String)?.wholeMatch(of: /[A-Za-z0-9-]{1,39}/) != nil
+    }
+    private static func nodeID(_ value: Any?) -> Bool {
+        (value as? String)?.wholeMatch(of: /[A-Za-z0-9_+=\/-]{1,256}/) != nil
+    }
+    private static func leaderboardVariables(_ operation: String, _ values: [String: Any]) -> Bool {
+        guard operation == "leaderboardOrganizations" || operation == "leaderboardMembers" else { return true }
+        guard values["after"] is NSNull || (1...1024).contains((values["after"] as? String)?.utf8.count ?? 0) else { return false }
+        if operation == "leaderboardOrganizations" { return true }
+        let format = ISO8601DateFormatter(); format.formatOptions.insert(.withFractionalSeconds)
+        guard login(values["login"]), nodeID(values["org"]),
+              let from = values["from"] as? String, let to = values["to"] as? String,
+              let start = format.date(from: from), let end = format.date(from: to) else { return false }
+        return abs(end.timeIntervalSince(start) - 30 * 86_400) < 0.001
+    }
     private static func valid(_ key: String, _ value: Any) -> Bool {
         switch key {
+        case "leaderboardOrganization":
+            guard let pair = value as? [String: Any], pair.count == 2 else { return false }
+            return login(pair["account"]) && nodeID(pair["id"])
         case "appearance": return ["system", "light", "dark"].contains(value as? String ?? "")
         case "historyWeeks": return [26, 53].contains(value as? Int ?? 0)
         case "reminderHour":
@@ -164,13 +184,16 @@ struct FlyoutFixture: Decodable {
             try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: cache.path)
         case "github":
             guard let input = args as? [String: Any], let operation = input["operation"] as? String,
-                  let required = ["viewer": [], "following": ["after"], "profile": ["login"], "history": ["login", "from", "to"]][operation],
+                  let required = ["viewer": [], "following": ["after"], "profile": ["login"], "history": ["login", "from", "to"],
+                                  "leaderboardOrganizations": ["after"], "leaderboardMembers": ["login", "org", "from", "to", "after"]][operation],
                   let values = input["variables"] as? [String: Any], Set(values.keys) == Set(required),
                   values.allSatisfy({ ($0.key == "after" && $0.value is NSNull) || (($0.value as? String)?.utf8.count ?? 1025) <= 1024 }),
+                  Self.leaderboardVariables(operation, values),
                   let manifest = Bundle.main.url(forResource: "operations", withExtension: "json", subdirectory: "SharedClient"),
                   let query = try JSONDecoder().decode([String: String].self, from: Data(contentsOf: manifest))[operation] else {
                 throw GitHubError.message("Unsupported GitHub request.")
             }
+            if let reviewResponse, !credentials { return try await reviewResponse(operation, values) }
             if operation == "viewer" { token = credentials ? await Credentials.cliToken() : nil }
             guard let token else {
                 throw GitHubError.classified("No GitHub CLI session found. Run gh auth login --hostname github.com, then try again.", code: "access")
@@ -187,6 +210,103 @@ struct FlyoutFixture: Decodable {
 }
 
 extension AppDelegate {
+    private func verifyLeaderboardFlyout(output: String) async throws {
+        let suite = "app.gitbar.mac.leaderboard-review.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        let cache = URL(fileURLWithPath: output).appendingPathComponent("\(UUID().uuidString)/dashboard.json")
+        defer { defaults.removePersistentDomain(forName: suite); try? FileManager.default.removeItem(at: cache.deletingLastPathComponent()) }
+        let local = SharedMacLocal(cache: cache, defaults: defaults, credentials: false)
+        defaults.set(["today"], forKey: "modules")
+        defaults.set(["streak", "heatmap", "favourites", "momentum", "records", "people", "years"], forKey: "hidden")
+        defaults.set(26, forKey: "historyWeeks")
+        let login = "calendar-fixture"
+        var failure: String?
+        var queries = 0
+        local.reviewResponse = { operation, vars in
+            let last: [String: Any] = ["hasNextPage": false, "endCursor": NSNull()]
+            switch operation {
+            case "viewer": return ["viewer": ["login": login, "name": "Jamie", "avatarUrl": "", "contributionsCollection": [
+                "contributionYears": [], "restrictedContributionsCount": 0, "contributionCalendar": ["totalContributions": 0, "weeks": []]]]]
+            case "following": return ["viewer": ["following": ["nodes": [], "pageInfo": last]]]
+            case "leaderboardOrganizations":
+                queries += 1
+                return ["viewer": ["login": login, "organizations": ["pageInfo": last, "nodes": [
+                    ["id": "north", "login": "northstar-labs", "viewerIsAMember": true],
+                    ["id": "south", "login": "tideline-studio", "viewerIsAMember": true]]]]]
+            case "leaderboardMembers":
+                try await Task.sleep(for: .milliseconds(350))
+                if let failure, failure != "roster_limit" { throw GitHubError.classified("Fixture failure", code: failure) }
+                let north = vars["org"] as? String == "north"
+                let handles = north ? ["Amira", "Ben", "Cora", "Dev", "Eli", "Flo", login, "Haru"] : ["Amira", login]
+                let counts = north ? [72, 56, 56, 38, 29, 24, 19, 8] : [0, 0]
+                let rows: [[String: Any]] = zip(handles, counts).map { handle, count in
+                    ["login": handle, "name": handle == login ? "Jamie Reed" : handle, "avatarUrl": "", "contributionsCollection": [
+                        "totalCommitContributions": count, "totalIssueContributions": 0, "totalPullRequestContributions": 0, "totalPullRequestReviewContributions": 0]]
+                }
+                return ["viewer": ["login": login], "organization": ["id": north ? "north" : "south", "viewerIsAMember": true,
+                    "membersWithRole": ["totalCount": failure == "roster_limit" ? 501 : rows.count, "nodes": rows, "pageInfo": last]]]
+            default: throw GitHubError.message("Unexpected fixture operation")
+            }
+        }
+        let review = try FlyoutReview(mode: "shared", local: local)
+        flyoutReview = review
+        reviewPopover.animates = false
+        NSApp.activate(ignoringOtherApps: true)
+        _ = applicationShouldHandleReopen(NSApp, hasVisibleWindows: false)
+        func wait(_ expression: String) async throws {
+            for _ in 0..<40 {
+                if (try? await review.evaluate(expression)) as? Bool == true { return }
+                try await Task.sleep(for: .milliseconds(100))
+            }
+            throw GitHubError.message("Leaderboard review failed: \(expression)")
+        }
+        func click(_ label: String) async throws {
+            _ = try await review.evaluate("document.querySelector('[aria-label=\"\(label)\"]').click(); void 0")
+        }
+        func capture(_ name: String) async throws {
+            guard let controller = reviewPopover.contentViewController else { throw CocoaError(.fileWriteUnknown) }
+            _ = try await review.evaluate("document.querySelector('[data-widget=leaderboard]').scrollIntoView(); void 0")
+            try await Task.sleep(for: .milliseconds(600))
+            try await review.capture(controller, to: output + "/leaderboard-\(name).png")
+        }
+        try await wait("!!document.querySelector('[data-widget=today]') && document.querySelector('#account').textContent === '@calendar-fixture'")
+        try await wait("!document.querySelector('[data-widget=leaderboard]')")
+        guard queries == 0 else { throw GitHubError.message("Hidden widget queried GitHub") }
+        try await click("Add widgets")
+        try await capture("gallery")
+        try await click("Add Organization leaderboard")
+        try await click("Back to dashboard")
+        try await wait("document.querySelector('.leaderboard-rank')?.textContent === '#7 of 8 visible members'")
+        try await capture("ranked")
+        try await click("Show more ranked members")
+        try await wait("document.querySelectorAll('.leaderboard-rows li').length === 8 && !!document.querySelector('.leaderboard-you')")
+        failure = "network"
+        try await click("Refresh leaderboard")
+        try await wait("!!document.querySelector('.leaderboard-rank') && document.querySelector('.leaderboard-status').textContent.includes('Refreshing leaderboard')")
+        try await wait("!!document.querySelector('.leaderboard-rank') && document.querySelector('.leaderboard-status').textContent.includes('last complete ranking')")
+        try await capture("stale")
+        failure = "access"
+        try await click("Retry leaderboard")
+        try await wait("!document.querySelector('.leaderboard-rank') && document.querySelector('.leaderboard-status').textContent.includes('SSO')")
+        try await click("Configure Organization leaderboard")
+        try await wait("!!document.querySelector('[data-widget=leaderboard] select') && !!document.querySelector('[aria-label=\"Recheck leaderboard access\"]') && !document.querySelector('[aria-label=\"Retry leaderboard\"]')")
+        try await capture("access-settings")
+        failure = "roster_limit"
+        try await click("Recheck leaderboard access")
+        try await wait("document.querySelector('.leaderboard-status').textContent.includes('500 visible members') && !!document.querySelector('[data-widget=leaderboard] select') && !document.querySelector('.leaderboard-status button')")
+        try await capture("roster-limit")
+        failure = nil
+        _ = try await review.evaluate("const selector=document.querySelector('[data-widget=leaderboard] select'); selector.value='south'; selector.dispatchEvent(new Event('change')); void 0")
+        try await wait("document.querySelector('.leaderboard-rank')?.textContent === '#1 of 2 visible members' && document.querySelectorAll('.leaderboard-rows li').length === 2 && document.querySelector('.leaderboard-org')?.textContent === 'tideline-studio'")
+        try await capture("switched")
+        guard defaults.dictionary(forKey: "leaderboardOrganization")?["id"] as? String == "south",
+              defaults.integer(forKey: "historyWeeks") == 26, defaults.stringArray(forKey: "hidden")?.contains("leaderboard") == false else {
+            throw GitHubError.message("Leaderboard preferences were not persisted without drift")
+        }
+        try "WKWebView fixture: opt-in from legacy layout, scoped rank #7/8, expansion, refresh/stale, access clearing + picker, roster limit, switch to tied zeroes, local preferences saved without changing history setting. No GitHub requests.\n"
+            .write(toFile: output + "/leaderboard-check.txt", atomically: true, encoding: .utf8)
+    }
+
     func compareFlyout(mode: String, output: String) async {
         func require(_ success: Bool, _ reason: String) throws {
             if !success { throw NSError(domain: "Flyout review", code: 1, userInfo: [NSLocalizedDescriptionKey: reason]) }
@@ -194,6 +314,11 @@ extension AppDelegate {
         func settle() async { try? await Task.sleep(for: .milliseconds(500)) }
         var facts: [String] = []
         do {
+            if mode == "leaderboard" {
+                try await verifyLeaderboardFlyout(output: output)
+                NSApp.terminate(nil)
+                return
+            }
             if mode == "migration" {
                 let directory = URL(fileURLWithPath: output).appendingPathComponent(UUID().uuidString)
                 let suite = "app.gitbar.mac.review.\(UUID().uuidString)"

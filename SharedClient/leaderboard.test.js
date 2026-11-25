@@ -85,6 +85,20 @@ test('retains only a dated complete snapshot through refresh and confirmed trans
   assert.deepEqual(state.snapshot().organizations.map(org => org.id), [south.id]);
 });
 
+test('failed viewer verification only keeps the current account’s data on confirmed transient failures', async () => {
+  const state = leaderboard({ publish:() => {} });
+  for (const code of ['access', 'unknown']) {
+    await state.refresh(context(good), { force:true });
+    const complete = state.snapshot().snapshot;
+    state.fail({ code:'network' });
+    assert.equal(state.snapshot().snapshot, complete);
+    assert.ok(state.snapshot().organizations.length);
+    state.fail({ code });
+    assert.equal(state.snapshot().snapshot, null);
+    assert.equal(state.snapshot().organizations, null);
+  }
+});
+
 test('scope changes and aborted native responses never publish ranks from the previous request', async () => {
   const state = leaderboard({ publish:() => {} });
   await state.refresh(context(good));

@@ -16,7 +16,7 @@ internal static class Program
         var assets = Path.Combine(AppContext.BaseDirectory, "SharedClient");
         if (args.Contains("--smoke-test"))
         {
-            foreach (var file in new[] { "dashboard.html", "dashboard.css", "dashboard.js", "core.js", "activity.js", "fixture.json", "operations.json" })
+            foreach (var file in new[] { "dashboard.html", "dashboard.css", "dashboard.js", "core.js", "activity.js", "leaderboard.js", "fixture.json", "operations.json" })
                 if (!File.Exists(Path.Combine(assets, file))) return 1;
             return System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString().Equals(args.Last(), StringComparison.OrdinalIgnoreCase) ? 0 : 2;
         }

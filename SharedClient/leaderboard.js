@@ -94,7 +94,8 @@
     function fail(error) {
       const code = errors.has(error?.code) ? error.code : 'unknown';
       cancel();
-      update({ error:code, snapshot:transient.has(code) ? state.snapshot : null });
+      if (!transient.has(code)) attempted = -Infinity;
+      update({ error:code, ...(!transient.has(code) ? { snapshot:null, organizations:null } : {}) });
     }
     async function refresh(context, { force = false } = {}) {
       if (context.signal.aborted) return;

@@ -70,6 +70,20 @@ footer { min-height:28px; padding:4px 22px; border-top:1px solid var(--edge); co
 #status::before { content:'●'; color:var(--accent); padding-right:6px; }
 .gallery section { border:1px solid var(--edge); border-radius:11px; margin-top:10px; }
 .face p { margin:6px 0; }
+.leaderboard, .leaderboard-status { display:grid; gap:7px; }
+.leaderboard-status:empty { display:none; }
+.leaderboard-status button, .leaderboard > button { justify-self:start; }
+.leaderboard-org { font-size:13px; font-weight:650; }
+.leaderboard-place { padding:8px 10px; border-radius:8px; background:color-mix(in srgb, var(--accent) 10%, var(--bg)); }
+.leaderboard-rank { font-size:16px; font-weight:650; color:var(--accent); }
+.leaderboard-rows { list-style:none; margin:0; padding:0; }
+.leaderboard-rows li { display:flex; align-items:center; gap:7px; padding:6px 2px; border-bottom:1px solid var(--edge); }
+.leaderboard-rows li > :first-child { flex:0 0 31px; }
+.leaderboard-avatar { display:grid; place-items:center; width:19px; height:19px; flex:none; border-radius:100%; background:color-mix(in srgb, var(--accent) 17%, var(--bg)); }
+.leaderboard-name { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.leaderboard-count { margin-inline-start:auto; font-variant-numeric:tabular-nums; }
+.leaderboard-you { color:var(--accent); }
+.leaderboard select { max-width:68%; }
 @media (prefers-reduced-motion:no-preference) { .tools { transition:opacity 110ms; } .flipping { animation:flip 180ms ease-out; } @keyframes flip { from { opacity:0; transform:perspective(600px) rotateY(-24deg); } } }
 @media (hover:none) { .tools { opacity:1; } }
 @media (forced-colors:active) { .mark.active { background:Highlight; forced-color-adjust:none; } }
