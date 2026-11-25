@@ -86,13 +86,15 @@ New-Item -ItemType Directory -Force $Evidence | Out-Null
 $Evidence = (Resolve-Path $Evidence).Path
 $app = Start-Process -FilePath (Resolve-Path $Exe) -ArgumentList '--fixture' -PassThru
 try {
-    $null = Wait-For 'GitGaze tray icon registered with Explorer' {
+    $hostWindow = Wait-For 'GitGaze native tray host window' {
+        $app.Refresh()
+        if ($app.HasExited) { throw "GitGaze exited before showing its tray icon: $($app.ExitCode)" }
         $hostWindow = [TraySmoke]::FindWindow($null, 'GitGaze tray')
-        if ($hostWindow -ne [IntPtr]::Zero) {
-            $rect = [TraySmoke]::IconRect($hostWindow)
-            $rect.R -gt $rect.L -and $rect.B -gt $rect.T
-        }
+        if ($hostWindow -ne [IntPtr]::Zero) { $hostWindow }
     }
+    $anchor = [TraySmoke]::IconRect($hostWindow)
+    Write-Host "Pre-open icon bounds: $($anchor.L),$($anchor.T)–$($anchor.R),$($anchor.B)"
+    # The icon can be in closed overflow; its rectangle need not exist before overflow opens.
     Open-Tray
     $flyout = Wait-For 'native flyout shown by tray click' { Visible-Flyout }
     $null = Wait-For 'fixture content exposed by WebView2 accessibility' {
