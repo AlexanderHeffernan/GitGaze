@@ -70,6 +70,7 @@ export class Store {
   #lastHistoryRefresh = 0;
   #lastPeopleRefresh = 0;
   #lastAutomaticRefresh = 0;
+  #leaderboardAgain = null;
   #activity = null;
   #celebrationTimer = null;
   #cacheWrite = Promise.resolve();
@@ -245,7 +246,9 @@ export class Store {
           if (current()) { this.peopleError = String(error.message ?? error); this.changed(); }
         }
       }
-      if (includeHistoryAndPeople && current()) void this.loadLeaderboard(force);
+      // The leaderboard refreshes with everything else; when your own count moves, it reloads at
+      // once instead of waiting out its five minutes, so new work shows up in every widget together.
+      if (current()) void this.loadLeaderboard({ fresh: force || this.stats.todayCount !== oldCount, reconnect: force });
     } catch (error) {
       if (current()) this.error = String(error.message ?? error);
     } finally {
@@ -253,21 +256,25 @@ export class Store {
     }
   }
 
-  /** Loads the leaderboard only while its widget is on the dashboard; results last five minutes. */
-  async loadLeaderboard(force = false) {
-    if (!this.#connected || !this.visibleModules.includes('leaderboard') || (this.board.loading && !force)) return;
+  /**
+   * Loads the leaderboard only while its widget is on the dashboard. Results last five minutes
+   * unless `fresh`; `reconnect` reads the CLI's token again, so a newly added scope applies at once.
+   */
+  async loadLeaderboard({ fresh = false, reconnect = false } = {}) {
+    if (!this.#connected || !this.visibleModules.includes('leaderboard')) return;
+    // A request during a load runs once it finishes, so a new period or new work isn't dropped.
+    if (this.board.loading) { this.#leaderboardAgain = { fresh: fresh || Boolean(this.#leaderboardAgain?.fresh) }; return; }
     const generation = this.#session;
     const update = patch => { if (generation === this.#session) { this.board = { ...this.board, ...patch }; this.changed(); } };
     update({ loading: true, error: null });
     try {
-      // A manual refresh reads the CLI's token again, so a newly added scope applies at once.
-      if (force) await github.connect();
-      const organizations = this.board.organizations && !force ? this.board.organizations : await leaderboard.organizations();
+      if (reconnect) await github.connect();
+      const organizations = this.board.organizations && !reconnect ? this.board.organizations : await leaderboard.organizations();
       update({ organizations });
       const organization = organizations.find(o => o.login === this.prefs.leaderboardOrg) ?? organizations[0];
       if (!organization) return update({ result: null, key: null });
       const key = `${organization.login}|${this.prefs.leaderboardPeriod}|${this.today}`;
-      if (!force && key === this.board.key && Date.now() - this.board.fetchedAt < 300_000) return;
+      if (!fresh && key === this.board.key && Date.now() - this.board.fetchedAt < 300_000) return;
       if (key !== this.board.key) update({ result: null });
       const result = await leaderboard.standings(organization, this.prefs.leaderboardPeriod);
       update({ result: { ...result, organization }, key, fetchedAt: Date.now() });
@@ -275,6 +282,9 @@ export class Store {
       update({ error: String(error.message ?? error) });
     } finally {
       update({ loading: false });
+      const again = this.#leaderboardAgain;
+      this.#leaderboardAgain = null;
+      if (again && generation === this.#session) void this.loadLeaderboard(again);
     }
   }
 
