@@ -11,7 +11,7 @@ One codebase builds both apps: the dashboard is a bundled web UI, and a small [T
 
 ## Features
 
-- **Six menu-bar styles.** A record dial, charge capsule, activity waveform, contribution mosaic, faceted prism, or activity ribbon. Each shows today's count, with an optional streak. On Windows the tray shows a compact dial and count.
+- **Six menu-bar styles.** A record dial, charge capsule, activity waveform, contribution mosaic, faceted prism, or activity ribbon. Each shows today's count, with an optional streak. On Windows each style has a compact square tray icon.
 - **A dashboard you arrange.** Add, remove, and reorder eight widgets: Today, Your streak, Contribution history, Favourite people, Weekly momentum, Personal bests, People you follow, and Year in perspective. Widget settings flip into place.
 - **Your people, at a glance.** Order favourites, see their daily/weekly/monthly/yearly contributions, and expand their graphs with a click.
 - **Compare your years.** Compare cumulative contributions with a previous year, either to the same calendar date or the full year's total.

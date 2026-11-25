@@ -386,7 +386,10 @@ function StylePreview({ style }) {
   const ref = useRef();
   const dark = isDark();
   useEffect(() => {
-    const canvas = ref.current, size = drawLabel(canvas, { ...figures(store, style, true), stale: false }, { prefs: store.prefs, dark, scale: 2 });
+    const canvas = ref.current, f = { ...figures(store, style, true), stale: false };
+    // Windows previews the tray icon at about its taskbar size; macOS shows the full label.
+    const size = store.platform === 'windows' ? { width: 24, height: 24 } : drawLabel(canvas, f, { prefs: store.prefs, dark, scale: 2 });
+    if (store.platform === 'windows') drawTrayIcon(canvas, f, { prefs: store.prefs, dark });
     canvas.style.width = `${size.width}px`; canvas.style.height = `${size.height}px`;
   });
   return html`<canvas ref=${ref} aria-hidden="true" />`;
@@ -438,11 +441,11 @@ function Settings() {
       ${prefs.palette === 'custom' && html`<div class="hex-fields"><${HexField} label="Light accent" value=${prefs.customLight} onChange=${v => store.set({ customLight: v })} />
         <${HexField} label="Dark accent" value=${prefs.customDark} onChange=${v => store.set({ customDark: v })} /></div>`}<//>
     <${Card}><${Heading}>${store.platform === 'windows' ? 'TRAY ICON' : 'MENU BAR'}<//>
-      ${store.platform === 'windows' && html`<div class="tiny secondary">The taskbar shows a compact dial and count; these styles appear in its tooltip and here.</div>`}
+      ${store.platform === 'windows' && html`<div class="tiny secondary">Tray icons are small squares, so each style has a compact version. Hover the icon for your streak.</div>`}
       <div class="styles">${Object.keys(menuStyles).map(style => html`<button class=${`tile style ${prefs.menuStyle === style ? 'selected' : ''}`}
         aria-pressed=${prefs.menuStyle === style} title=${`${title(style)} menu bar display`} onClick=${() => store.set({ menuStyle: style })}>
         <span class="style-preview"><${StylePreview} style=${style} /></span><span class="tile-label">${title(style)}</span></button>`)}</div>
-      <${Toggle} label="Show streak" checked=${prefs.menuStreak} onChange=${v => store.set({ menuStreak: v })} /><//>
+      ${store.platform !== 'windows' && html`<${Toggle} label="Show streak" checked=${prefs.menuStreak} onChange=${v => store.set({ menuStreak: v })} />`}<//>
     <${Card}><${Heading}>CELEBRATIONS<//>
       <${Toggle} label="Visual celebrations" checked=${prefs.visualCelebrations} onChange=${v => store.set({ visualCelebrations: v })} />
       <div class="celebrations">${[['fireworks', 'Fireworks', 'sparkles'], ['nova', 'Supernova', 'sun'], ['meteors', 'Meteor shower', 'sparkle']].map(([style, label, icon]) => html`

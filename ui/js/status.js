@@ -161,25 +161,69 @@ export function drawLabel(canvas, f, { prefs, dark, scale = 2, celebrating = fal
   return { width, height: HEIGHT };
 }
 
-/** Windows tray icons are small squares: the record dial around today's count. */
+/**
+ * Windows tray icons are small squares, so each style has a compact form: the dial (orbit) or
+ * diamond (prism) around today's count, or the count above a progress bar (charge), sparkline
+ * (pulse), four-week grid (mosaic) or seven bars (ribbon). The streak stays in the tooltip.
+ */
 export function drawTrayIcon(canvas, f, { prefs, dark }) {
   const size = 32, ctx = canvas.getContext('2d');
   canvas.width = canvas.height = size;
   ctx.clearRect(0, 0, size, size);
-  const colors = { accent: accent(prefs, true), gold: gold(true), primary: a => primary(dark, a) };
-  const steps = 16, lit = f.count > 0 ? Math.max(1, Math.ceil(Math.min(1, f.progress) * steps)) : 0;
-  for (let i = 0; i < steps; i++) {
-    ctx.save(); ctx.translate(16, 16); ctx.rotate((i / steps) * Math.PI * 2);
-    ctx.fillStyle = i < lit ? (f.record ? colors.gold : colors.accent) : colors.primary(0.35);
-    roundRect(ctx, -1.4, -15.5, 2.8, 6, 1.4);
-    ctx.restore();
-  }
+  const tint = a => f.record ? gold(true, a) : accent(prefs, true, a);
+  const track = a => primary(dark, a);
+  const progress = f.count > 0 ? Math.min(1, f.progress) : 0;
   const count = f.connected ? (f.count > 99 ? '99+' : String(f.count)) : '–';
-  ctx.font = `700 ${count.length > 2 ? 10 : count.length > 1 ? 13 : 15}px ${SYSTEM}`;
-  ctx.fillStyle = dark ? '#fff' : '#111';
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(count, 16, 17);
-  if (f.stale) { ctx.fillStyle = colors.gold; ctx.beginPath(); ctx.arc(27, 27, 3.5, 0, Math.PI * 2); ctx.fill(); }
+  const number = (y, sizes) => {
+    ctx.font = `700 ${sizes[Math.min(count.length, 3) - 1]}px ${SYSTEM}`;
+    ctx.fillStyle = dark ? '#fff' : '#111';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(count, 16, y);
+  };
+  const recent = f.recent.slice(-7), busiest = Math.max(1, ...recent);
+
+  if (f.style === 'orbit') {
+    const steps = 16, lit = f.count > 0 ? Math.max(1, Math.ceil(progress * steps)) : 0;
+    for (let i = 0; i < steps; i++) {
+      ctx.save(); ctx.translate(16, 16); ctx.rotate((i / steps) * Math.PI * 2);
+      ctx.fillStyle = i < lit ? tint() : track(0.35);
+      roundRect(ctx, -1.4, -15.5, 2.8, 6, 1.4);
+      ctx.restore();
+    }
+    number(17, [15, 13, 10]);
+  } else if (f.style === 'prism') {
+    const corners = [[16, 2], [30, 16], [16, 30], [2, 16]];
+    ctx.lineWidth = 3; ctx.lineCap = 'round';
+    corners.forEach(([x, y], i) => {
+      const [nx, ny] = corners[(i + 1) % 4];
+      ctx.strokeStyle = f.count > 0 && i / 4 < progress ? tint() : track(0.3);
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(nx, ny); ctx.stroke();
+    });
+    number(16.5, [13, 11, 8]);
+  } else {
+    number(10.5, [16, 14, 10]);
+    if (f.style === 'pulse') {
+      ctx.beginPath();
+      recent.forEach((v, i) => { const x = 3 + i * (26 / 6), y = 29 - (v / busiest) * 9; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+      ctx.lineCap = ctx.lineJoin = 'round';
+      ctx.strokeStyle = tint(0.25); ctx.lineWidth = 5; ctx.stroke();
+      ctx.strokeStyle = tint(); ctx.lineWidth = 2.2; ctx.stroke();
+    } else if (f.style === 'mosaic') {
+      f.recent.slice(-28).forEach((v, i) => {
+        ctx.fillStyle = v > 0 ? tint(0.45 + Math.min(0.55, v / 20)) : track(0.22);
+        roundRect(ctx, 2 + (i % 7) * 4, 19 + Math.floor(i / 7) * 3.2, 3.2, 2.4, 0.8);
+      });
+    } else if (f.style === 'ribbon') {
+      recent.forEach((v, i) => {
+        ctx.fillStyle = v > 0 ? tint(0.45 + Math.min(0.55, v / 20)) : track(0.25);
+        roundRect(ctx, 2 + i * 4, 23, 3.2, 6, 1);
+      });
+    } else { // charge
+      ctx.fillStyle = track(0.25); roundRect(ctx, 3, 24, 26, 4, 2);
+      if (progress > 0) { ctx.fillStyle = tint(); roundRect(ctx, 3, 24, Math.max(4, 26 * progress), 4, 2); }
+    }
+  }
+  if (f.stale) { ctx.fillStyle = gold(true); ctx.beginPath(); ctx.arc(28, 4, 3.5, 0, Math.PI * 2); ctx.fill(); }
   return { width: size, height: size };
 }
 
