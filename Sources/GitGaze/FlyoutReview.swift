@@ -194,18 +194,39 @@ extension AppDelegate {
         func settle() async { try? await Task.sleep(for: .milliseconds(500)) }
         var facts: [String] = []
         do {
-            if mode == "migration" {
-                let directory = URL(fileURLWithPath: output).appendingPathComponent(UUID().uuidString)
-                let suite = "app.gitbar.mac.review.\(UUID().uuidString)"
+            if ["migration", "migration-seed", "migration-upgrade", "migration-relaunch"].contains(mode) {
+                let disposable = mode == "migration"
+                let directory = URL(fileURLWithPath: output).appendingPathComponent(disposable ? UUID().uuidString : "upgrade-state")
+                let suite = "app.gitbar.mac.review.\(directory.path.utf8.reduce(UInt64(0)) { ($0 &* 31) &+ UInt64($1) })"
                 let defaults = UserDefaults(suiteName: suite)!
-                defer { defaults.removePersistentDomain(forName: suite); try? FileManager.default.removeItem(at: directory) }
+                defer {
+                    if disposable || mode == "migration-relaunch" {
+                        defaults.removePersistentDomain(forName: suite)
+                        try? FileManager.default.removeItem(at: directory)
+                    }
+                }
                 let cache = directory.appendingPathComponent("GitBar/dashboard.json")
-                try FileManager.default.createDirectory(at: cache.deletingLastPathComponent(), withIntermediateDirectories: true)
                 let fixture = try FlyoutReview(mode: "shared").fixture
-                let legacy = try JSONEncoder().encode(fixture.dashboard)
-                try legacy.write(to: cache)
-                defaults.set(53, forKey: "historyWeeks")
-                defaults.set("violet", forKey: "palette")
+                let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as! String
+                let stamp = directory.appendingPathComponent("version")
+                if disposable || mode == "migration-seed" {
+                    try FileManager.default.createDirectory(at: cache.deletingLastPathComponent(), withIntermediateDirectories: true)
+                    try JSONEncoder().encode(fixture.dashboard).write(to: cache)
+                    defaults.set(53, forKey: "historyWeeks")
+                    defaults.set("violet", forKey: "palette")
+                    defaults.set(true, forKey: "detectPushes")
+                    try version.write(to: stamp, atomically: true, encoding: .utf8)
+                    if mode == "migration-seed" {
+                        try "Version \(version) seeded disposable Swift Codable cache and preferences.\n".write(toFile: output + "/\(mode)-check.txt", atomically: true, encoding: .utf8)
+                        NSApp.terminate(nil)
+                        return
+                    }
+                }
+                let legacy = try Data(contentsOf: cache)
+                if !disposable {
+                    let installed = try String(contentsOf: stamp, encoding: .utf8)
+                    try require(installed != version, "Replacement must report a different bundle version")
+                }
                 let local = SharedMacLocal(cache: cache, defaults: defaults, credentials: false)
                 let review = try FlyoutReview(mode: "shared", local: local)
                 flyoutReview = review
@@ -218,15 +239,18 @@ extension AppDelegate {
                     try? await Task.sleep(for: .milliseconds(150))
                 }
                 let state = try await review.evaluate("[document.querySelector('#status').textContent, document.querySelector('#account').textContent, document.querySelector('.heat')?.getAttribute('aria-label')].join('|')") as? String
-                try require(state == "Cached activity · refresh failed|@\(fixture.dashboard.profile.person.login)|53-week contribution graph", "Legacy cache did not load offline: \(state ?? "nil")")
-                _ = try await review.evaluate("document.querySelector('[aria-label=\"Configure Contribution history\"]').click();const field=document.activeElement;field.value='26';field.dispatchEvent(new Event('change'));void 0")
-                await settle()
-                let focused = try await review.evaluate("document.activeElement.getAttribute('aria-label')") as? String
-                try require(focused == "Configure Contribution history", "Selection must restore focus")
-                try require(UserDefaults(suiteName: suite)?.integer(forKey: "historyWeeks") == 26 && defaults.string(forKey: "palette") == "violet", "Preference patch did not persist or clobbered legacy state")
+                let weeks = mode == "migration-relaunch" ? 26 : 53
+                try require(state == "Cached activity · refresh failed|@\(fixture.dashboard.profile.person.login)|\(weeks)-week contribution graph", "Legacy cache did not load offline: \(state ?? "nil")")
+                if mode != "migration-relaunch" {
+                    _ = try await review.evaluate("document.querySelector('[aria-label=\"Configure Contribution history\"]').click();const field=document.activeElement;field.value='26';field.dispatchEvent(new Event('change'));void 0")
+                    await settle()
+                    let focused = try await review.evaluate("document.activeElement.getAttribute('aria-label')") as? String
+                    try require(focused == "Configure Contribution history", "Selection must restore focus")
+                }
+                try require(defaults.integer(forKey: "historyWeeks") == 26 && defaults.string(forKey: "palette") == "violet" && defaults.bool(forKey: "detectPushes"), "Preference patch did not persist or clobbered legacy state")
                 let bytes = try Data(contentsOf: cache)
                 try require(bytes == legacy, "Offline refresh modified the legacy cache")
-                try "WKWebView loaded Swift Codable disk cache offline, saved 26 weeks to disposable defaults without replacing palette or cache, and restored selector focus.\n".write(toFile: output + "/migration-check.txt", atomically: true, encoding: .utf8)
+                try "Version \(version): WKWebView opened offline with \(weeks) weeks; 26 weeks persisted without changing palette, Git push detection preference, or cache.\n".write(toFile: output + "/\(mode)-check.txt", atomically: true, encoding: .utf8)
                 NSApp.terminate(nil)
                 return
             }
@@ -247,7 +271,19 @@ extension AppDelegate {
             }
             NSApp.activate(ignoringOtherApps: true)
             await settle()
+            let opening = ContinuousClock.now
             _ = applicationShouldHandleReopen(NSApp, hasVisibleWindows: false)
+            if mode == "shared" {
+                for _ in 0..<80 {
+                    if (try? await review.evaluate("document.querySelector('.number')?.textContent || ''")) as? String == "7" { break }
+                    try? await Task.sleep(for: .milliseconds(25))
+                }
+            }
+            if let content = reviewPopover.contentViewController?.view {
+                content.layoutSubtreeIfNeeded()
+                content.window?.displayIfNeeded()
+            }
+            facts.append("\(mode): programmatic open to laid-out content \(opening.duration(to: .now)) (animation off; not input-to-screen)")
             await settle()
             guard let controller = reviewPopover.contentViewController, let window = controller.view.window else {
                 try require(false, "Cannot find popover window (shown=\(reviewPopover.isShown), screens=\(NSScreen.screens.count))")
@@ -260,7 +296,7 @@ extension AppDelegate {
             let anchor = statusWindow.convertToScreen(button.convert(button.bounds, to: nil))
             try require(reviewPopover.isShown && reviewPopover.behavior == .transient && window.isKeyWindow, "Popover must be transient, shown and keyboard-active")
             try require(window.frame.maxX >= anchor.minX && window.frame.minX <= anchor.maxX && window.frame.minY < anchor.minY,
-                        "Popover must position against the status item")
+                        "Popover must position against the status item: window \(window.frame), anchor \(anchor)")
             facts.append("\(mode): anchored transient key popover; status \(anchor), popover \(window.frame)")
             if mode == "shared" {
                 for _ in 0..<16 {
