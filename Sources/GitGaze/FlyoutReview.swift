@@ -83,6 +83,10 @@ struct FlyoutFixture: Decodable {
         FileHandle.standardError.write(Data("WebKit navigation: \(error.localizedDescription)\n".utf8))
     }
 
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        if local == nil, webView === view { phases.append("navigation committed: \(started.duration(to: .now))") }
+    }
+
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         guard message.frameInfo.isMainFrame, message.webView === view,
               isDashboard(view?.url),
@@ -91,9 +95,14 @@ struct FlyoutFixture: Decodable {
         case "ready":
             phases.append("bridge ready: \(started.duration(to: .now))")
             if local == nil {
-                view?.callAsyncJavaScript("const start = performance.now(); window.gitGazeReceive(snapshot); return performance.now() - start;", arguments: ["snapshot": snapshot], in: nil, in: .page) { [weak self, started] result in
+                view?.callAsyncJavaScript("""
+                    const start = performance.now();
+                    window.gitGazeReceive(snapshot);
+                    const nav = performance.getEntriesByType('navigation')[0];
+                    return [nav?.responseEnd ?? -1, nav?.domInteractive ?? -1, performance.now() - start];
+                    """, arguments: ["snapshot": snapshot], in: nil, in: .page) { [weak self, started] result in
                     guard let self, self.started == started, let elapsed = try? result.get() else { return }
-                    self.phases.append("fixture rendered: \(started.duration(to: .now)); JS receive/render: \(elapsed) ms")
+                    self.phases.append("fixture rendered: \(started.duration(to: .now)); page response end, DOM interactive, JS receive/render: \(elapsed) ms")
                 }
             } else { view?.evaluateJavaScript("window.gitGazeStart()", completionHandler: nil) }
         case "preferences":
