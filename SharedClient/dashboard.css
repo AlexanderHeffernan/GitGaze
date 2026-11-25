@@ -22,6 +22,7 @@ section:hover .tools, section:focus-within .tools, .tools.active { opacity:1; }
 .dial > * { grid-area:1/1; }
 .dial svg { width:100%; }
 .number { font-size:40px; font-weight:640; letter-spacing:-2px; line-height:1; font-variant-numeric:tabular-nums; }
+.number.compact { font-size:32px; }
 .center { text-align:center; }
 .large { font-size:27px; font-weight:620; letter-spacing:-.8px; }
 .secondary { color:var(--muted); font-size:10px; }

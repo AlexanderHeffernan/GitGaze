@@ -59,17 +59,17 @@
   function navigate(next) { page = next; configuring = undefined; render(); main.scrollTop = 0; main.focus(); }
 
   function todayCard() {
-    const chart = svg('svg', { viewBox:'0 0 100 100', 'aria-hidden':'true' });
-    for (let i = 0; i < 36; i++) {
-      chart.append(svg('line', { x1:50, x2:50, y1:3, y2:i % 3 ? 5 : 7, transform:`rotate(${i * 10} 50 50)`, stroke:'var(--edge)' }));
+    const chart = svg('svg', { viewBox:'0 0 112 112', 'aria-hidden':'true' });
+    const lit = stats.todayCount > 0 ? Math.max(1, Math.ceil(stats.progress * 40)) : 0;
+    for (let i = 0; i < 40; i++) {
+      chart.append(svg('rect', { x:54.5, y:1, width:3, height:8, rx:1.5, transform:`rotate(${i * 9} 56 56)`,
+        fill:i < lit ? (stats.isRecord ? 'var(--gold)' : 'var(--accent)') : 'currentColor', opacity:i < lit ? 1 : .16 }));
     }
-    for (const [r, stroke, width] of [[33, 'var(--edge)', 1], [40, 'var(--edge)', 3], [40, stats.isRecord ? 'var(--gold)' : 'var(--accent)', 3]]) {
-      chart.append(svg('circle', { cx:50, cy:50, r, fill:'none', stroke, 'stroke-width':width }));
-    }
-    chart.lastChild.setAttribute('pathLength', 100);
-    chart.lastChild.setAttribute('stroke-dasharray', `${stats.progress * 100} 100`);
-    chart.lastChild.setAttribute('transform', 'rotate(-90 50 50)');
-    const dial = group('dial', chart, group('center', text(num(stats.todayCount), 'number'), text('today')));
+    const count = group('center', text(num(stats.todayCount), stats.todayCount > 99 ? 'number compact' : 'number'), text('today'));
+    count.setAttribute('aria-hidden', 'true');
+    const dial = group('dial', chart, count);
+    dial.setAttribute('role', 'img');
+    dial.setAttribute('aria-label', `${num(stats.todayCount)} contributions today. ${Math.trunc(stats.progress * 100)} percent of your next daily record.`);
     const progress = stats.isRecord ? `↗ +${stats.todayCount - stats.previousBest} above previous` : `${stats.target - stats.todayCount} to beat it`;
     return group('hero', dial, group('', text(stats.isRecord ? 'NEW DAILY BEST' : 'DAILY BEST'), group('split', text(num(stats.bestDay), 'large'), text('contributions')),
       text(progress, stats.isRecord ? 'metric record' : 'metric'), ...(data.historyComplete ? [] : [text('Past year only')])));

@@ -81,3 +81,13 @@ jobs:
         with:
           name: GitGaze-shared-review-win-${{ matrix.arch }}
           path: payload
+      - name: Exercise packaged ARM64 flyout on the Explorer desktop
+        if: matrix.arch == 'arm64' && github.event_name == 'push'
+        timeout-minutes: 3
+        shell: pwsh
+        run: scripts/windows-tray-smoke.ps1 -Exe payload/GitGaze.exe -Evidence desktop-evidence
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() && matrix.arch == 'arm64' && github.event_name == 'push' }}
+        with:
+          name: GitGaze-arm64-desktop-evidence
+          path: desktop-evidence
