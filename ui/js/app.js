@@ -398,7 +398,7 @@ function StylePreview({ style }) {
     const canvas = ref.current, f = { ...figures(store, style, true), stale: false };
     // Windows previews the tray icon at about its taskbar size; macOS shows the full label.
     const size = store.platform === 'windows' ? { width: 24, height: 24 } : drawLabel(canvas, f, { prefs: store.prefs, dark, scale: 2 });
-    if (store.platform === 'windows') drawTrayIcon(canvas, f, { prefs: store.prefs, dark });
+    if (store.platform === 'windows') drawTrayIcon(canvas, f, { prefs: store.prefs, dark, pixels: Math.round(24 * devicePixelRatio) });
     canvas.style.width = `${size.width}px`; canvas.style.height = `${size.height}px`;
   });
   return html`<canvas ref=${ref} aria-hidden="true" />`;
@@ -538,7 +538,7 @@ function Dashboard() {
   const go = next => () => { store.page = next; store.changed(); };
   return html`<div class="panel">
     <header>
-      ${page === 'dashboard' && html`<span class="logo" dangerouslySetInnerHTML=${{ __html: markSVG(accentRGB(store.prefs, isDark()), { size: 17 }) }} />`}
+      ${page === 'dashboard' && html`<span class="logo" dangerouslySetInnerHTML=${{ __html: markSVG(accentRGB(store.prefs, isDark()), { size: 19 }) }} />`}
       <h1>${page === 'settings' ? 'Settings' : page === 'gallery' ? 'Add widgets' : 'Stoke'}</h1><span class="spacer" />
       ${page !== 'dashboard'
         ? html`<button class="quiet back-button" onClick=${go('dashboard')}><${Icon} name="back" /> Back</button>`

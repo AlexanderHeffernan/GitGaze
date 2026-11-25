@@ -166,19 +166,31 @@ export function drawLabel(canvas, f, { prefs, dark, scale = 2, celebrating = fal
  * diamond (prism) around today's count, or the count above a progress bar (charge), sparkline
  * (pulse), four-week grid (mosaic) or seven bars (ribbon). The streak stays in the tooltip.
  */
-export function drawTrayIcon(canvas, f, { prefs, dark }) {
-  const size = 32, ctx = canvas.getContext('2d');
-  canvas.width = canvas.height = size;
-  ctx.clearRect(0, 0, size, size);
+/**
+ * A Windows tray icon: today's count as large as the icon allows, with each style reduced to a thin
+ * edge or a short band. Drawn in a 32-unit space at the tray's real pixel size (16 at 100% scaling,
+ * 24 at 150%), so Windows shows it without resampling.
+ */
+export function drawTrayIcon(canvas, f, { prefs, dark, pixels = Math.max(16, Math.round(16 * (globalThis.devicePixelRatio || 1))) }) {
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.height = pixels;
+  ctx.setTransform(pixels / 32, 0, 0, pixels / 32, 0, 0);
+  ctx.clearRect(0, 0, 32, 32);
   const tint = a => f.record ? gold(true, a) : accent(prefs, true, a);
   const track = a => primary(dark, a);
   const progress = f.count > 0 ? Math.min(1, f.progress) : 0;
   const count = f.connected ? (f.count > 99 ? '99+' : String(f.count)) : '–';
-  const number = (y, sizes) => {
-    ctx.font = `700 ${sizes[Math.min(count.length, 3) - 1]}px ${SYSTEM}`;
+  /** The count, centred in a box, at the largest size whose digits fit it. */
+  const number = (top, bottom, width) => {
+    ctx.letterSpacing = count.length > 1 ? '-1px' : '0px';
+    ctx.font = `700 100px ${SYSTEM}`;
+    const probe = ctx.measureText(count);
+    const ascent = probe.actualBoundingBoxAscent || 72;
+    const size = Math.min(100 * (bottom - top) / ascent, 100 * width / probe.width);
+    ctx.font = `700 ${size.toFixed(1)}px ${SYSTEM}`;
     ctx.fillStyle = dark ? '#fff' : '#111';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(count, 16, y);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText(count, 16, (top + bottom) / 2 + ascent * size / 200);
   };
   const recent = f.recent.slice(-7), busiest = Math.max(1, ...recent);
 
@@ -187,44 +199,43 @@ export function drawTrayIcon(canvas, f, { prefs, dark }) {
     for (let i = 0; i < steps; i++) {
       ctx.save(); ctx.translate(16, 16); ctx.rotate((i / steps) * Math.PI * 2);
       ctx.fillStyle = i < lit ? tint() : track(0.35);
-      roundRect(ctx, -1.4, -15.5, 2.8, 6, 1.4);
+      roundRect(ctx, -1.3, -16, 2.6, 3.6, 1.3);
       ctx.restore();
     }
-    number(17, [15, 13, 10]);
+    number(8, 24, 21);
   } else if (f.style === 'prism') {
-    const corners = [[16, 2], [30, 16], [16, 30], [2, 16]];
-    ctx.lineWidth = 3; ctx.lineCap = 'round';
-    corners.forEach(([x, y], i) => {
-      const [nx, ny] = corners[(i + 1) % 4];
-      ctx.strokeStyle = f.count > 0 && i / 4 < progress ? tint() : track(0.3);
-      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(nx, ny); ctx.stroke();
+    // Four facets around the edge, lit in turn as the day approaches its best.
+    const sides = [[2, 1.5, 28, 3], [27.5, 2, 3, 28], [2, 27.5, 28, 3], [1.5, 2, 3, 28]];
+    sides.forEach(([x, y, w, h], i) => {
+      ctx.fillStyle = f.count > 0 && i / 4 < progress ? tint() : track(0.3);
+      roundRect(ctx, x, y, w, h, 1.5);
     });
-    number(16.5, [13, 11, 8]);
+    number(7.5, 24.5, 22);
+  } else if (f.style === 'charge') {
+    number(1, 23, 31);
+    ctx.fillStyle = track(0.25); roundRect(ctx, 1, 27, 30, 4.5, 2.25);
+    if (progress > 0) { ctx.fillStyle = tint(); roundRect(ctx, 1, 27, Math.max(4.5, 30 * progress), 4.5, 2.25); }
   } else {
-    number(10.5, [16, 14, 10]);
+    number(1, 21, 31);
     if (f.style === 'pulse') {
       ctx.beginPath();
-      recent.forEach((v, i) => { const x = 3 + i * (26 / 6), y = 29 - (v / busiest) * 9; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+      recent.forEach((v, i) => { const x = 2.5 + i * (27 / 6), y = 30 - (v / busiest) * 5.5; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
       ctx.lineCap = ctx.lineJoin = 'round';
-      ctx.strokeStyle = tint(0.25); ctx.lineWidth = 5; ctx.stroke();
-      ctx.strokeStyle = tint(); ctx.lineWidth = 2.2; ctx.stroke();
+      ctx.strokeStyle = tint(); ctx.lineWidth = 2.6; ctx.stroke();
     } else if (f.style === 'mosaic') {
-      f.recent.slice(-28).forEach((v, i) => {
+      f.recent.slice(-14).forEach((v, i) => {
         ctx.fillStyle = v > 0 ? tint(0.45 + Math.min(0.55, v / 20)) : track(0.22);
-        roundRect(ctx, 2 + (i % 7) * 4, 19 + Math.floor(i / 7) * 3.2, 3.2, 2.4, 0.8);
+        roundRect(ctx, 1 + (i % 7) * 4.4, 25 + Math.floor(i / 7) * 3.6, 3.6, 2.9, 0.8);
       });
-    } else if (f.style === 'ribbon') {
+    } else { // ribbon
       recent.forEach((v, i) => {
         ctx.fillStyle = v > 0 ? tint(0.45 + Math.min(0.55, v / 20)) : track(0.25);
-        roundRect(ctx, 2 + i * 4, 23, 3.2, 6, 1);
+        roundRect(ctx, 1 + i * 4.4, 25, 3.6, 6.5, 1);
       });
-    } else { // charge
-      ctx.fillStyle = track(0.25); roundRect(ctx, 3, 24, 26, 4, 2);
-      if (progress > 0) { ctx.fillStyle = tint(); roundRect(ctx, 3, 24, Math.max(4, 26 * progress), 4, 2); }
     }
   }
-  if (f.stale) { ctx.fillStyle = gold(true); ctx.beginPath(); ctx.arc(28, 4, 3.5, 0, Math.PI * 2); ctx.fill(); }
-  return { width: size, height: size };
+  if (f.stale) { ctx.fillStyle = gold(true); ctx.beginPath(); ctx.arc(28.5, 3.5, 3.5, 0, Math.PI * 2); ctx.fill(); }
+  return { width: pixels, height: pixels };
 }
 
 export function tooltip(store) {

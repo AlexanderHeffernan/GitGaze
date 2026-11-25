@@ -3,7 +3,7 @@
 
 import { drawLabel, drawTrayIcon, figures, menuStyles } from './app/js/status.js';
 import { palettes, title } from './app/js/theme.js';
-import { markSVG } from './app/js/mark.js';
+import { cheer } from './mascot.js';
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
@@ -39,9 +39,6 @@ clock();
 setInterval(clock, 15000);
 
 // ----- Accent -----
-
-// The brand mark follows the accent too.
-$$('[data-mark]').forEach(el => { el.innerHTML = markSVG('currentColor', { size: Number(el.dataset.mark) }); });
 
 function setAccent(prefs) {
   const value = prefs.palette === 'custom' ? null : palettes[prefs.palette]?.[1];
@@ -79,6 +76,7 @@ popover.addEventListener('load', connect);
 addEventListener('message', ({ data, origin }) => {
   if (origin !== location.origin || data?.gitgaze !== 'celebrate') return;
   celebrate(burst, { ...data.args, fromBelow: platform === 'windows' }, anchorX);
+  cheer();
 });
 
 function celebrate(frame, args, anchor) {
@@ -103,7 +101,7 @@ function render() {
       canvas.style.height = `${size.height}px`;
     } else {
       const canvas = $('#tray-icon');
-      drawTrayIcon(canvas, f, { prefs: store.prefs, dark });
+      drawTrayIcon(canvas, f, { prefs: store.prefs, dark, pixels: Math.round(20 * devicePixelRatio) });
       canvas.style.width = canvas.style.height = '20px';
     }
     drawStyles();
