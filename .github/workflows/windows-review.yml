@@ -25,7 +25,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - run: node --test SharedClient/core.test.js
+      - run: node --test SharedClient/core.test.js SharedClient/activity.test.js
       - name: Publish review payload and run native process smoke test
         shell: pwsh
         run: |

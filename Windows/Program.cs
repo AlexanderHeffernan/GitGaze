@@ -16,7 +16,7 @@ internal static class Program
         var assets = Path.Combine(AppContext.BaseDirectory, "SharedClient");
         if (args.Contains("--smoke-test"))
         {
-            foreach (var file in new[] { "dashboard.html", "dashboard.css", "dashboard.js", "core.js", "fixture.json" })
+            foreach (var file in new[] { "dashboard.html", "dashboard.css", "dashboard.js", "core.js", "activity.js", "fixture.json", "operations.json" })
                 if (!File.Exists(Path.Combine(assets, file))) return 1;
             return System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString().Equals(args.Last(), StringComparison.OrdinalIgnoreCase) ? 0 : 2;
         }
@@ -37,7 +37,8 @@ internal static class Program
             MessageBox.Show("Could not register GitGaze in the Windows notification area.", "GitGaze");
             return 1;
         }
-        var model = JsonNode.Parse(File.ReadAllText(Path.Combine(assets, "fixture.json")))!.AsObject();
+        var fixture = args.Contains("--fixture") ? JsonNode.Parse(File.ReadAllText(Path.Combine(assets, "fixture.json")))!.AsObject() : null;
+        using var local = new LocalServices();
         var view = new WebView2();
         var flyout = new Window { Title = "GitGaze", Width = 384, Height = 640, ShowInTaskbar = false,
             WindowStyle = WindowStyle.None, ResizeMode = ResizeMode.NoResize, Content = view };
@@ -69,14 +70,19 @@ internal static class Program
                     web.SetVirtualHostNameToFolderMapping(Origin, assets, CoreWebView2HostResourceAccessKind.Deny);
                     web.NavigationStarting += (_, e) => { if (e.Uri != Document) e.Cancel = true; };
                     web.NewWindowRequested += (_, e) => e.Handled = true;
-                    web.WebMessageReceived += (_, e) =>
+                    web.WebMessageReceived += async (_, e) =>
                     {
-                        if (e.Source != Document) return;
-                        var message = JsonNode.Parse(e.WebMessageAsJson);
-                        switch (message?["action"]?.GetValue<string>())
+                        if (e.Source != Document || e.WebMessageAsJson.Length > 4_000_000) return;
+                        if (JsonNode.Parse(e.WebMessageAsJson) is not JsonObject message || message["action"] is not JsonValue action ||
+                            !action.TryGetValue<string>(out var name)) return;
+                        switch (name)
                         {
-                            case "ready": web.PostWebMessageAsJson(model.ToJsonString()); break;
-                            case "preferences": model["preferences"] = message["value"]?.DeepClone(); break;
+                            case "ready": web.PostWebMessageAsJson(fixture?.ToJsonString() ?? "{\"kind\":\"start\"}"); break;
+                            case "preferences" when fixture != null: fixture["preferences"] = message["value"]?.DeepClone(); break;
+                            case "request" when fixture == null && message["value"] is JsonObject call:
+                                var reply = await local.Reply(call);
+                                if (!app.Dispatcher.HasShutdownStarted) web.PostWebMessageAsJson(reply.ToJsonString());
+                                break;
                             case "dismiss": flyout.Hide(); tray.ReturnFocus(); break;
                         }
                     };

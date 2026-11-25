@@ -1,0 +1,6 @@
+{
+  "viewer": "query { viewer { login name avatarUrl contributionsCollection { contributionYears restrictedContributionsCount contributionCalendar { totalContributions weeks { contributionDays { date contributionCount color } } } } } }",
+  "profile": "query($login:String!) { user(login:$login) { login name avatarUrl contributionsCollection { contributionYears restrictedContributionsCount contributionCalendar { totalContributions weeks { contributionDays { date contributionCount color } } } } } }",
+  "history": "query($login:String!, $from:DateTime!, $to:DateTime!) { user(login:$login) { login name avatarUrl contributionsCollection(from:$from,to:$to) { contributionYears restrictedContributionsCount contributionCalendar { totalContributions weeks { contributionDays { date contributionCount color } } } } } }",
+  "following": "query($after:String) { viewer { following(first:100, after:$after) { nodes { login name avatarUrl } pageInfo { hasNextPage endCursor } } } }"
+}

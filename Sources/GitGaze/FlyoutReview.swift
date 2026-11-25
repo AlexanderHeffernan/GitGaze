@@ -1,5 +1,6 @@
 #if DEBUG
 import AppKit
+import CoreFoundation
 import GitGazeCore
 import WebKit
 
@@ -8,7 +9,7 @@ struct FlyoutFixture: Decodable {
     let dashboard: Dashboard
 }
 
-/// Experiment only: same signed bundle's local resources, no network, credentials or real preferences.
+/// Opt-in host for the shared renderer; fixture comparisons have no native service access.
 @MainActor final class FlyoutReview: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
     let mode: String
     let root: URL
@@ -16,9 +17,12 @@ struct FlyoutFixture: Decodable {
     private var snapshot: [String: Any]
     private var close: (() -> Void)?
     weak var view: WKWebView?
+    private var liveController: NSViewController?
+    private let local: SharedMacLocal?
 
-    init(mode: String) throws {
+    init(mode: String, local: SharedMacLocal? = nil) throws {
         self.mode = mode
+        self.local = local
         root = Bundle.main.resourceURL!.appendingPathComponent("SharedClient", isDirectory: true)
         let bytes = try Data(contentsOf: root.appendingPathComponent("fixture.json"))
         fixture = try JSONDecoder().decode(FlyoutFixture.self, from: bytes)
@@ -27,6 +31,10 @@ struct FlyoutFixture: Decodable {
 
     func controller(close: @escaping () -> Void) -> NSViewController {
         self.close = close
+        if let liveController {
+            view?.evaluateJavaScript("window.gitGazeOpen?.()", completionHandler: nil)
+            return liveController
+        }
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .nonPersistent()
         configuration.userContentController.add(self, name: "gitgaze")
@@ -36,6 +44,7 @@ struct FlyoutFixture: Decodable {
         view = web
         let controller = NSViewController()
         controller.view = web
+        if local != nil { liveController = controller }
         web.loadFileURL(root.appendingPathComponent("dashboard.html"), allowingReadAccessTo: root)
         return controller
     }
@@ -59,9 +68,22 @@ struct FlyoutFixture: Decodable {
               let state = message.body as? [String: Any], let action = state["action"] as? String else { return }
         switch action {
         case "ready":
-            view?.callAsyncJavaScript("window.gitGazeReceive(snapshot)", arguments: ["snapshot": snapshot], in: nil, in: .page, completionHandler: nil)
+            if local == nil {
+                view?.callAsyncJavaScript("window.gitGazeReceive(snapshot)", arguments: ["snapshot": snapshot], in: nil, in: .page, completionHandler: nil)
+            } else { view?.evaluateJavaScript("window.gitGazeStart()", completionHandler: nil) }
         case "preferences":
             snapshot["preferences"] = state["value"]
+        case "request":
+            guard let local, let call = state["value"] as? [String: Any], let id = call["id"] as? Int, id > 0, id <= Int(Int32.max),
+                  call["version"] as? Int == 1, let method = call["method"] as? String,
+                  let bytes = try? JSONSerialization.data(withJSONObject: call), bytes.count <= 4_000_000 else { return }
+            let args = call["args"]
+            Task { @MainActor in
+                let reply: [String: Any]
+                do { reply = ["id": id, "result": try await local.request(method, args: args)] }
+                catch { reply = ["id": id, "error": error.localizedDescription] }
+                view?.callAsyncJavaScript("window.gitGazeReply(reply)", arguments: ["reply": reply], in: nil, in: .page, completionHandler: nil)
+            }
         case "dismiss": close?()
         default: break
         }
@@ -87,6 +109,82 @@ struct FlyoutFixture: Decodable {
     }
 }
 
+@MainActor final class SharedMacLocal {
+    let cache: URL
+    let defaults: UserDefaults
+    let credentials: Bool
+    private var token: String?
+
+    init(cache: URL, defaults: UserDefaults, credentials: Bool = true) {
+        self.cache = cache
+        self.defaults = defaults
+        self.credentials = credentials
+    }
+
+    private static let keys = ["modules", "hidden", "favourites", "favouriteOrder", "palette", "customLight", "customDark", "menuStyle", "menuStreak",
+        "appearance", "notifications", "visualCelebrations", "celebrationStyle", "streakReminder", "reminderHour", "lastReminderDay", "detectPushes", "historyWeeks", "comparisonYear", "comparisonMode"]
+    private static let widgets = Set(["today", "streak", "heatmap", "favourites", "momentum", "records", "people", "years"])
+    private static func valid(_ key: String, _ value: Any) -> Bool {
+        switch key {
+        case "appearance": return ["system", "light", "dark"].contains(value as? String ?? "")
+        case "historyWeeks": return [26, 53].contains(value as? Int ?? 0)
+        case "reminderHour":
+            guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID(), let hour = value as? Int else { return false }
+            return (0...23).contains(hour)
+        case "modules", "hidden":
+            guard let list = value as? [String] else { return false }
+            return Set(list).count == list.count && Set(list).isSubset(of: widgets)
+        default: return false
+        }
+    }
+
+    func request(_ method: String, args: Any?) async throws -> Any {
+        switch method {
+        case "readLocal":
+            let prefs = defaults.dictionaryRepresentation().filter { Self.keys.contains($0.key) }
+            let data = try? Data(contentsOf: cache)
+            // Bad/older cache is treated as missing, not sent into the renderer.
+            let dashboard = data.flatMap { bytes in
+                (try? JSONDecoder().decode(Dashboard.self, from: bytes)) == nil ? nil : try? JSONSerialization.jsonObject(with: bytes)
+            }
+            return ["preferences": prefs, "dashboard": dashboard ?? NSNull()]
+        case "writePreferences":
+            guard let prefs = args as? [String: Any], prefs.allSatisfy({ Self.valid($0.key, $0.value) }) else { throw CocoaError(.validationMissingMandatoryProperty) }
+            for (key, value) in prefs {
+                defaults.set(value, forKey: key)
+            }
+        case "writeCache":
+            guard let args, JSONSerialization.isValidJSONObject(args) else { throw CocoaError(.fileWriteUnknown) }
+            let bytes = try JSONSerialization.data(withJSONObject: args)
+            _ = try JSONDecoder().decode(Dashboard.self, from: bytes)
+            try FileManager.default.createDirectory(at: cache.deletingLastPathComponent(), withIntermediateDirectories: true,
+                attributes: [.posixPermissions: 0o700])
+            try bytes.write(to: cache, options: .atomic)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: cache.path)
+        case "github":
+            guard let input = args as? [String: Any], let operation = input["operation"] as? String,
+                  let required = ["viewer": [], "following": ["after"], "profile": ["login"], "history": ["login", "from", "to"]][operation],
+                  let values = input["variables"] as? [String: Any], Set(values.keys) == Set(required),
+                  values.allSatisfy({ ($0.key == "after" && $0.value is NSNull) || (($0.value as? String)?.utf8.count ?? 1025) <= 1024 }),
+                  let manifest = Bundle.main.url(forResource: "operations", withExtension: "json", subdirectory: "SharedClient"),
+                  let query = try JSONDecoder().decode([String: String].self, from: Data(contentsOf: manifest))[operation] else {
+                throw GitHubError.message("Unsupported GitHub request.")
+            }
+            if operation == "viewer" { token = credentials ? await Credentials.cliToken() : nil }
+            guard let token else {
+                throw GitHubError.message("No GitHub CLI session found. Run gh auth login --hostname github.com, then try again.")
+            }
+            let data = try await GitHubClient(token: token).query(query, variables: values.compactMapValues { $0 as? String })
+            guard let envelope = try JSONSerialization.jsonObject(with: data) as? [String: Any], let result = envelope["data"] else {
+                throw GitHubError.message("GitHub did not return activity data.")
+            }
+            return result
+        default: throw GitHubError.message("Unsupported host request.")
+        }
+        return NSNull()
+    }
+}
+
 extension AppDelegate {
     func compareFlyout(mode: String, output: String) async {
         func require(_ success: Bool, _ reason: String) throws {
@@ -95,6 +193,42 @@ extension AppDelegate {
         func settle() async { try? await Task.sleep(for: .milliseconds(500)) }
         var facts: [String] = []
         do {
+            if mode == "migration" {
+                let directory = URL(fileURLWithPath: output).appendingPathComponent(UUID().uuidString)
+                let suite = "app.gitbar.mac.review.\(UUID().uuidString)"
+                let defaults = UserDefaults(suiteName: suite)!
+                defer { defaults.removePersistentDomain(forName: suite); try? FileManager.default.removeItem(at: directory) }
+                let cache = directory.appendingPathComponent("GitBar/dashboard.json")
+                try FileManager.default.createDirectory(at: cache.deletingLastPathComponent(), withIntermediateDirectories: true)
+                let fixture = try FlyoutReview(mode: "shared").fixture
+                let legacy = try JSONEncoder().encode(fixture.dashboard)
+                try legacy.write(to: cache)
+                defaults.set(53, forKey: "historyWeeks")
+                defaults.set("violet", forKey: "palette")
+                let local = SharedMacLocal(cache: cache, defaults: defaults, credentials: false)
+                let review = try FlyoutReview(mode: "shared", local: local)
+                flyoutReview = review
+                reviewPopover.animates = false
+                NSApp.activate(ignoringOtherApps: true)
+                await settle()
+                _ = applicationShouldHandleReopen(NSApp, hasVisibleWindows: false)
+                for _ in 0..<30 {
+                    if (try? await review.evaluate("document.querySelector('#status').textContent")) as? String == "Cached activity · refresh failed" { break }
+                    try? await Task.sleep(for: .milliseconds(150))
+                }
+                let state = try await review.evaluate("[document.querySelector('#status').textContent, document.querySelector('#account').textContent, document.querySelector('.heat')?.getAttribute('aria-label')].join('|')") as? String
+                try require(state == "Cached activity · refresh failed|@\(fixture.dashboard.profile.person.login)|53-week contribution graph", "Legacy cache did not load offline: \(state ?? "nil")")
+                _ = try await review.evaluate("document.querySelector('[aria-label=\"Configure Contribution history\"]').click();const field=document.activeElement;field.value='26';field.dispatchEvent(new Event('change'));void 0")
+                await settle()
+                let focused = try await review.evaluate("document.activeElement.getAttribute('aria-label')") as? String
+                try require(focused == "Configure Contribution history", "Selection must restore focus")
+                try require(UserDefaults(suiteName: suite)?.integer(forKey: "historyWeeks") == 26 && defaults.string(forKey: "palette") == "violet", "Preference patch did not persist or clobbered legacy state")
+                let bytes = try Data(contentsOf: cache)
+                try require(bytes == legacy, "Offline refresh modified the legacy cache")
+                try "WKWebView loaded Swift Codable disk cache offline, saved 26 weeks to disposable defaults without replacing palette or cache, and restored selector focus.\n".write(toFile: output + "/migration-check.txt", atomically: true, encoding: .utf8)
+                NSApp.terminate(nil)
+                return
+            }
             try require(["shared", "reference"].contains(mode), "Unknown mode: \(mode)")
             let review = try FlyoutReview(mode: mode)
             flyoutReview = review
@@ -142,7 +276,12 @@ extension AppDelegate {
                 try require(focused == "SELECT", "Widget back should move focus into its native-styled selector")
                 await settle()
                 try await review.capture(controller, to: output + "/shared-widget-settings.png")
-                _ = try await review.evaluate("const input=document.activeElement;input.value='26';input.dispatchEvent(new Event('change'));document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}));document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}));void 0")
+                let restored = try await review.evaluate("const input=document.activeElement;input.value='26';input.dispatchEvent(new Event('change'));document.activeElement.getAttribute('aria-label')") as? String
+                try require(restored == "Configure Contribution history", "Selection must restore focus")
+                _ = try await review.evaluate("document.activeElement.click();document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}));void 0")
+                let escaped = try await review.evaluate("document.activeElement.getAttribute('aria-label')") as? String
+                try require(escaped == "Configure Contribution history", "Escape must restore focus")
+                _ = try await review.evaluate("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}));void 0")
             } else {
                 store.settings = true
                 await settle()

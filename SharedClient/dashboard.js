@@ -32,9 +32,30 @@
   const group = (css, ...children) => { const node = el('div', css); node.append(...children); return node; };
   const text = (s, css = 'secondary') => el('div', css, s);
   const num = n => n.toLocaleString();
-  let data, prefs, today, stats, page = 'GitGaze', configuring, status = '';
+  let data, prefs, today, stats, page = 'GitGaze', configuring, status = '', error, live;
+  const requests = new Map();
+  let serial = 0, activity;
 
-  function change(next) { prefs = next; post('preferences', next); render(); }
+  window.gitGazeReply = ({ id, result, error }) => {
+    const request = requests.get(id);
+    if (!request) return;
+    requests.delete(id);
+    if (error) request.reject(new Error(error));
+    else request.resolve(result);
+  };
+  const request = (method, args) => new Promise((resolve, reject) => {
+    const id = ++serial;
+    requests.set(id, { resolve, reject });
+    post('request', { version:1, id, method, args:args ?? null });
+  });
+
+  function change(next) { prefs = next; if (activity) void activity.setPreferences(next); else post('preferences', next); render(); }
+  function flip(key, open) {
+    configuring = open ? key : undefined;
+    render();
+    main.querySelector(`[data-widget="${key}"] ${open ? 'select' : 'button[aria-label^="Configure"]'}`)?.focus();
+  }
+  function refresh() { if (activity) void activity.refresh({ force:true }); else post('refresh'); }
   function navigate(next) { page = next; configuring = undefined; render(); main.scrollTop = 0; main.focus(); }
 
   function todayCard() {
@@ -88,7 +109,12 @@
     const input = el('select');
     for (const [value, name] of values) { const choice = el('option', '', name); choice.value = value; input.append(choice); }
     input.value = current;
-    input.addEventListener('change', () => onChange(input.value));
+    input.addEventListener('change', () => {
+      const key = configuring;
+      onChange(input.value);
+      if (key) flip(key, false);
+      else main.querySelector('select')?.focus();
+    });
     const field = el('label', 'option', label); field.append(input); return field;
   }
 
@@ -119,14 +145,13 @@
     section.querySelector('h2').textContent = title;
     section.dataset.widget = key;
     const openSettings = configuring === key;
-    const flip = (next, target) => { configuring = next; render(); main.querySelector(`[data-widget="${key}"] ${target}`)?.focus(); };
     if (gallery) tools.append(button('+', `Add ${title}`, () => change({ ...prefs, hidden:prefs.hidden.filter(id => id !== key) })));
-    else if (openSettings) tools.append(button('↶ Back', `Back from ${title}`, () => flip(undefined, 'button[aria-label^="Configure"]')));
+    else if (openSettings) tools.append(button('↶ Back', `Back from ${title}`, () => flip(key, false)));
     else {
       for (const [delta, glyph, word] of [[-1, '↑', 'up'], [1, '↓', 'down']]) {
         tools.append(button(glyph, `Move ${title} ${word}`, () => change(core.moveWidget(prefs, key, delta)), !visible[visible.indexOf(key) + delta]));
       }
-      if (settings) tools.append(button('☷', `Configure ${title}`, () => flip(key, 'select')));
+      if (settings) tools.append(button('☷', `Configure ${title}`, () => flip(key, true)));
       tools.append(button('−', `Remove ${title}`, () => change({ ...prefs, hidden:[...prefs.hidden, key] })));
     }
     if (gallery || openSettings) tools.classList.add('active');
@@ -143,15 +168,16 @@
     $('title').textContent = page;
     document.documentElement.dataset.mode = prefs.appearance;
     actions.replaceChildren(...(page === 'GitGaze' ? [button('+', 'Add widgets', () => navigate('Add widgets')),
-      button('↻', 'Refresh', () => post('refresh')), button('☷', 'Settings', () => navigate('Settings'))] : [button('↶ Back', 'Back to dashboard', () => navigate('GitGaze'))]));
+      button('↻', 'Refresh', refresh, !live), button('☷', 'Settings', () => navigate('Settings'))] : [button('↶ Back', 'Back to dashboard', () => navigate('GitGaze'))]));
     main.classList.toggle('gallery', page === 'Add widgets');
     main.replaceChildren();
+    if (error) main.append(text(error, 'metric record'));
     if (page === 'Settings') {
       const section = el('section');
       section.append(el('h2', '', 'Appearance'), select('Theme', [['system','Auto'],['light','Light'],['dark','Dark']], prefs.appearance, appearance => change({ ...prefs, appearance })));
       main.append(section);
     } else if (!data) {
-      main.append(el('h2', '', 'Your work, in view.'), el('p', '', 'Connect with your GitHub CLI session.'), button('Connect GitHub CLI', 'Connect GitHub CLI', () => post('refresh')));
+      main.append(el('h2', '', 'Your work, in view.'), el('p', '', 'Connect with your GitHub CLI session.'), button('Connect GitHub CLI', 'Connect GitHub CLI', refresh));
     } else {
       const gallery = page === 'Add widgets';
       const visible = prefs.modules.filter(id => prefs.hidden.includes(id) === gallery);
@@ -170,13 +196,25 @@
     today = snapshot.today || core.localDay(new Date());
     stats = data ? core.statistics([...data.history, ...data.profile.days], today) : null;
     status = snapshot.status || (data ? 'Cached activity' : 'Not connected');
+    error = snapshot.error;
+    live = snapshot.live === true;
     render();
   };
   window.gitGazeOpen = () => navigate('GitGaze');
-  if (window === window.top && window.chrome?.webview) window.chrome.webview.addEventListener('message', event => window.gitGazeReceive(event.data));
+  window.gitGazeStart = () => {
+    if (window !== window.top || activity) return;
+    activity = globalThis.gitGazeActivity({ request, core, onChange:window.gitGazeReceive });
+    void activity.start();
+    setInterval(() => void activity.refresh({ background:true }), 30000);
+  };
+  if (window === window.top && window.chrome?.webview) window.chrome.webview.addEventListener('message', ({ data }) => {
+    if (data.kind === 'start') window.gitGazeStart();
+    else if ('id' in data) window.gitGazeReply(data);
+    else window.gitGazeReceive(data);
+  });
   document.addEventListener('keydown', event => {
     if (event.key !== 'Escape' || event.defaultPrevented) return;
-    if (configuring) { configuring = undefined; render(); }
+    if (configuring) flip(configuring, false);
     else if (page !== 'GitGaze') navigate('GitGaze');
     else post('dismiss');
   });

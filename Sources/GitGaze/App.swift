@@ -68,6 +68,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             Task { await compareFlyout(mode: CommandLine.arguments[index + 1], output: CommandLine.arguments[index + 2]) }
             return
         }
+        if CommandLine.arguments.contains("--shared-client") {
+            do {
+                flyoutReview = try FlyoutReview(mode: "shared", local: SharedMacLocal(cache: store.cacheURL, defaults: .standard))
+                showPopover()
+            } catch {
+                NSAlert(error: error).runModal()
+                NSApp.terminate(nil)
+            }
+            return
+        }
         #endif
         if !CommandLine.arguments.contains("--review") { store.updates.start() }
         Task {
