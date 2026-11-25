@@ -1,0 +1,19 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The bundled GitGaze UI. No remote content is ever loaded.",
+  "windows": ["popover", "celebration"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-hide",
+    "notification:default",
+    "updater:default",
+    "dialog:allow-ask",
+    "dialog:allow-message",
+    "process:allow-restart",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [{ "url": "https://github.com/*" }, { "url": "https://cli.github.com/*" }]
+    }
+  ]
+}

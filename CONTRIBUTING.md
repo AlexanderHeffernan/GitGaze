@@ -1,38 +1,30 @@
 # Contributing to GitGaze
 
-Small, native, private, and motivating is the goal. Bug fixes, accessibility improvements, and focused additions are welcome. Discuss substantial product changes in an issue before building them.
+Small, private, and motivating is the goal. Bug fixes, accessibility improvements, and focused additions are welcome. Discuss substantial product changes in an issue before building them.
 
 ## Project layout
 
-- `Sources/GitGaze/`: AppKit menu-bar lifecycle, SwiftUI components and widgets, preferences, CLI authentication, local push detection, and Sparkle update settings.
-- `Sources/GitGazeCore/`: contribution calculations, GitHub GraphQL reads, and Trace2 push-event parsing.
-- `Tests/GitGazeCoreTests/`: public-behaviour tests for calendars, streaks, records, yearly comparisons, celebrations, and push events.
-- `scripts/`: app packaging, generated icon, and debug-only native UI review.
-- `Info.plist`: app metadata. The legacy `app.gitbar.mac` identity and `GitBar` data/socket paths are deliberate compatibility identifiers; do not casually rename them.
+One codebase builds the macOS menu-bar app and the Windows tray app.
 
-Use Xcode 16+ with Swift 6 selected on macOS 14+. Sparkle is the only third-party package dependency; its exact version and binary-artifact checksum are pinned through SwiftPM. Preserve its bundled licences when packaging.
+- `ui/`: the entire interface and app behaviour, as plain ES modules with no build step. `js/store.js` owns refresh, caching, preferences, reminders, and celebrations; `js/app.js` renders the flyout with [Preact](https://preactjs.com/) and htm (vendored in `ui/vendor/`); `js/status.js` draws the menu-bar label and tray icon; `js/stats.js` is the contribution maths.
+- `src-tauri/`: the native shell in Rust. It owns the tray item and flyout window, the GitHub CLI token and GraphQL requests (the token never reaches the UI), storage, launch at login, Git push detection, and the updater.
+- `tests/`: Node tests for the contribution maths. `src-tauri` has Rust unit tests for push-event parsing; `scripts/test_release.py` covers release versions and signing.
+- `scripts/`: release packaging and signing, and the browser preview server.
+- The `app.gitbar.mac` identifier and `GitBar` data/socket paths are deliberate compatibility identifiers; do not casually rename them.
 
 ## Before submitting a change
 
 ```sh
-swift test
-swift test -c release
+npm ci
+npm test
+cargo test --manifest-path src-tauri/Cargo.toml
 python3 -m unittest discover -s scripts -p 'test_*.py'
-./scripts/build.sh
-.build/GitGaze.app/Contents/MacOS/GitGaze --smoke-test
+npm run build
 ```
 
-Keep changes focused and use shared controls so widgets and Settings stay consistent. Add regression coverage for observable behaviour rather than implementation details. Contribution counts must continue to come from GitHub's API calendar; a successful push is only a refresh hint. Do not add repository write access just to display activity.
+Keep changes focused and use the shared controls so widgets and Settings stay consistent. Add regression coverage for observable behaviour rather than implementation details. Contribution counts must continue to come from GitHub's API calendar; a successful push is only a refresh hint. Do not add repository write access just to display activity.
 
-For visual changes, inspect the native rendered UI in light and dark appearance, and relevant states such as empty activity, loading, and Reduce Motion. The debug review workflow can help:
-
-```sh
-./scripts/review.sh
-```
-
-**This is a local, interactive review—not a headless CI test.** It requires an authenticated GitHub CLI session, a graphical macOS session, and Screen Recording permission for the invoking terminal. It restarts the app, renders real signed-in contribution data, briefly changes and restores preferences, captures widget and celebration animations, and checks popover reset and preference persistence. If push detection is already enabled, it also disables/re-enables that integration and tests local pushes to two disposable repositories. It does not enable push detection for the first time or push anything to GitHub. `ffmpeg` is optional for converting frame captures to videos/GIFs.
-
-Artifacts and temporary frame captures go under `.amp/in/`, which is ignored. The review renderer is excluded from release builds. Do not run it during other app use; if interrupted, review your preferences before continuing.
+For visual changes, check light and dark appearance and states such as empty activity, loading, and reduced motion. `npm run preview` serves the UI with deterministic sample data at <http://localhost:5175/?platform=macos> (or `?platform=windows`), which is quick for layout work; then check the real app with `npm run dev`. Running the built app again while it is open shows the flyout, and `GitGaze --celebrate` previews a celebration.
 
 ## Marketing site
 
@@ -56,11 +48,11 @@ On Linux, add `--with-deps` to the Playwright install command if browser librari
 ## Protect private information
 
 - Never commit tokens, signing identities, `.env` files, local caches, or raw Git traces.
-- Review screenshots before sharing: graphs, usernames, avatars, and private contribution totals may identify you or people you follow. The review script uses your real account, not anonymised demo data.
+- Review screenshots before sharing: graphs, usernames, avatars, and private contribution totals may identify you or people you follow. `npm run dev` uses your real account; the preview uses sample data.
 - Use synthetic contribution data in tests. Do not copy an authenticated API response into a fixture without sanitising it.
-- Bug reports should include macOS/Xcode versions, reproducible steps, and redacted errors—not credentials or complete personal cache files.
+- Bug reports should include your OS version and GitGaze version, reproducible steps, and redacted errors—not credentials or complete personal cache files.
 - Report security concerns privately to the repository maintainer rather than disclosing usable credentials or exploits in a public issue.
 
 ## Distribution
 
-The default build is ad-hoc signed. Building successfully is not proof that a downloadable app will pass Gatekeeper. Successful `main` pushes publish signed Sparkle updates automatically after CI passes. Developer ID signing/notarisation is enabled separately through repository configuration; see [RELEASING.md](docs/RELEASING.md). First-run, optional login items, notifications, and installed updates should also be checked on a separate Mac. Never casually replace the Sparkle public key: existing installations trust it.
+macOS builds are ad-hoc signed and Windows installers are unsigned, so Gatekeeper and SmartScreen may warn on first install. Successful `main` pushes publish signed updates automatically after CI passes; see [RELEASING.md](docs/RELEASING.md). Never casually replace the update signing key: every existing installation trusts it.
