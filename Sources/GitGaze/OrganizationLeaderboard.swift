@@ -163,7 +163,7 @@ struct OrganizationLeaderboardSettings: View {
 
     var body: some View {
         if let organizations = leaderboard.organizations, !organizations.isEmpty {
-            ChoiceMenu(title: "Organization", selection: Binding(get: { leaderboard.selectedID }, set: leaderboard.select),
+            ChoiceMenu(title: "Organization", selection: Binding(get: { leaderboard.selectedID }, set: { leaderboard.select($0) }),
                        options: organizations.map { ($0.id, $0.login) })
             Text("Rank members by the activity visible to your GitHub CLI session.").foregroundStyle(.secondary)
         } else if leaderboard.loading {
