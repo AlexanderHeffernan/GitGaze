@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "The bundled GitGaze UI. No remote content is ever loaded.",
+  "description": "The bundled Stoke UI. No remote content is ever loaded.",
   "windows": ["popover", "celebration"],
   "permissions": [
     "core:default",

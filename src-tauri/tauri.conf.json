@@ -70,7 +70,7 @@
   "plugins": {
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IEdpdEdhemUgdXBkYXRlIGtleSA1RENEMzM4MEI5MzkwNTU2ClJXUmR6VE9BdVRrRlZoZHRid3dBZU9pb0lTSjJlYVV1Wm14V09jVllYbUlQMCtweStJaHNVOHZwCg==",
-      "endpoints": ["https://github.com/AlexanderHeffernan/GitGaze/releases/latest/download/latest.json"],
+      "endpoints": ["https://github.com/AlexanderHeffernan/Stoke/releases/latest/download/latest.json"],
       "requireSignedVersion": true,
       "windows": { "installMode": "passive" }
     }
