@@ -74,14 +74,13 @@ em { font-style: normal; color: var(--accent); transition: color 300ms ease; }
 .button.ghost:hover { background: rgb(255 255 255 / 0.06); }
 
 /* Hero */
-.hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 560px); gap: clamp(28px, 5vw, 72px); align-items: start; padding: clamp(36px, 6vw, 72px) 0 40px; }
+.hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 560px); gap: clamp(28px, 5vw, 72px); align-items: center; padding: clamp(16px, 3vw, 28px) 0 24px; }
 .eyebrow { display: inline-flex; align-items: center; gap: 9px; margin: 0; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); transition: color 300ms; }
 .eyebrow.center { display: flex; justify-content: center; }
 .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 12px currentColor; }
 h1, h2 { font-weight: 800; letter-spacing: -0.045em; line-height: 0.98; margin: 0; }
 h1 { font-size: clamp(2.8rem, 6vw, 4.7rem); margin: 18px 0 24px; }
 h1 em { display: block; }
-@media (min-width: 981px) { .hero-copy { padding-top: 64px; } }
 .lede { max-width: 30em; margin: 0 0 30px; font-size: 1.14rem; color: var(--muted); }
 .cta { display: flex; flex-wrap: wrap; gap: 12px; }
 .fine { margin: 18px 0 0; font-size: 0.84rem; color: var(--faint); }
@@ -90,7 +89,7 @@ h1 em { display: block; }
 .demo { display: grid; justify-items: center; gap: 16px; min-width: 0; }
 .stage {
   --menubar: 26px; --taskbar: 46px;
-  position: relative; width: 100%; max-width: 560px; height: 720px; overflow: hidden; border-radius: 22px;
+  position: relative; width: 100%; max-width: 560px; height: 692px; overflow: hidden; border-radius: 22px;
   border: 1px solid rgb(255 255 255 / 0.1); box-shadow: 0 40px 100px -30px rgb(0 0 0 / 0.8), 0 0 0 8px rgb(255 255 255 / 0.025);
   isolation: isolate;
 }
@@ -149,7 +148,7 @@ h1 em { display: block; }
 .burst { position: absolute; top: var(--menubar); left: var(--burst-x, 60px); border: 0; pointer-events: none; background: transparent; color-scheme: normal; z-index: 2; }
 .stage[data-platform='windows'] .menubar { display: none; }
 .stage[data-platform='windows'] .taskbar { display: flex; }
-.stage[data-platform='windows'] .popover { top: auto; bottom: calc(var(--taskbar) + 12px); height: 640px; }
+.stage[data-platform='windows'] .popover { top: auto; bottom: calc(var(--taskbar) + 6px); height: 640px; }
 .stage[data-platform='windows'] .burst { top: auto; bottom: calc(var(--taskbar) + 8px); }
 
 .controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; padding: 7px; background: rgb(255 255 255 / 0.04); border: 1px solid var(--line); border-radius: 999px; }
@@ -168,7 +167,8 @@ h1 em { display: block; }
 .round.accent { background: rgb(var(--accent-rgb) / 0.18); color: var(--accent); border-color: rgb(var(--accent-rgb) / 0.35); }
 .round.accent svg { fill: currentColor; stroke: none; }
 .round.accent:hover { background: rgb(var(--accent-rgb) / 0.3); transform: rotate(12deg); }
-.demo-note { margin: 0; font-size: 0.82rem; color: var(--faint); text-align: center; }
+.fine.try { margin-top: 6px; }
+.fine.try span { color: var(--accent); }
 
 /* Sections */
 .section { padding: clamp(72px, 10vw, 120px) 0 0; }
@@ -204,7 +204,7 @@ h2 { font-size: clamp(2.3rem, 5vw, 3.6rem); text-align: center; margin: 14px 0 4
 .ranks li { display: grid; grid-template-columns: 20px 26px 1fr auto; align-items: center; gap: 10px; padding: 9px 14px; border-radius: 12px; background: rgb(0 0 0 / 0.28); border: 1px solid var(--line); font-size: 0.92rem; }
 .ranks li.you { border-color: rgb(var(--accent-rgb) / 0.45); background: rgb(var(--accent-rgb) / 0.1); }
 .ranks b { color: var(--faint); font-family: var(--rounded); }
-.ranks i { width: 26px; height: 26px; border-radius: 50%; background: linear-gradient(135deg, hsl(var(--h) 70% 70%), hsl(calc(var(--h) + 40) 60% 45%)); }
+.ranks img { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; }
 .ranks em { color: var(--text); font-family: var(--rounded); font-weight: 700; font-variant-numeric: tabular-nums; }
 .ranks li.you em { color: var(--accent); }
 
@@ -264,7 +264,7 @@ h2 { font-size: clamp(2.3rem, 5vw, 3.6rem); text-align: center; margin: 14px 0 4
   .footer nav { margin-left: 0; }
 }
 @media (max-width: 440px) {
-  .stage { height: 700px; border-radius: 18px; }
+  .stage { border-radius: 18px; }
   .menubar > span:not(.status-item):not(.spacer):not(.clock), .menubar b, .menubar .glyph { display: none; }
   .burst-box iframe { transform: scale(0.8); }
 }

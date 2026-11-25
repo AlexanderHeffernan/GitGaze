@@ -46,24 +46,29 @@ function calendar(login, from, through) {
     const next = random((base ^ Math.imul(Number(date.replaceAll('-', '')), 2654435761)) >>> 0);
     next();
     const roll = next();
-    const count = roll < busy ? Math.floor(next() * next() * 18) + 1 : 0;
+    let count = roll < busy ? Math.floor(next() * next() * 18) + 1 : 0;
+    // The signed-in sample user is mid-streak, so the demo shows a lively dashboard.
+    if (login === me[0] && date >= offset(dayKey(), -11)) count = Math.max(count, date === dayKey() ? 6 : 2 + Math.floor(next() * 7));
     days.push({ date, contributionCount: count, color: levels[count ? Math.min(4, Math.floor(count / 5) + 1) : 0] });
   }
   return days;
 }
 
+// Fictional people with stock sample portraits, and the app's author as the signed-in user.
 const sample = [
-  ['octocat', 'The Octocat'], ['torvalds', 'Linus Torvalds'], ['gaearon', 'Dan Abramov'], ['sindresorhus', 'Sindre Sorhus'],
-  ['yyx990803', 'Evan You'], ['mitchellh', 'Mitchell Hashimoto'], ['kentcdodds', 'Kent C. Dodds'], ['tj', 'TJ Holowaychuk'],
-  ['addyosmani', 'Addy Osmani'], ['jessfraz', 'Jessie Frazelle'], ['antfu', 'Anthony Fu'], ['shadcn', 'shadcn'],
-  ['rauchg', 'Guillermo Rauch'], ['bellard', 'Fabrice Bellard'],
+  ['hanasato', 'Hana Sato'], ['leomartins', 'Leo Martins'], ['julespark', 'Jules Park'], ['samrivera', 'Sam Rivera'],
+  ['avathompson', 'Ava Thompson'], ['omarhaddad', 'Omar Haddad'], ['ellanovak', 'Ella Novak'], ['theogrant', 'Theo Grant'],
+  ['meilin', 'Mei Lin'], ['ethancole', 'Ethan Cole'], ['sofiarossi', 'Sofia Rossi'], ['noahbecker', 'Noah Becker'],
+  ['iriswalsh', 'Iris Walsh'], ['lucasferreira', 'Lucas Ferreira'],
 ];
-const person = ([login, name]) => ({ login, name, avatarUrl: '' });
+const me = ['AlexanderHeffernan', 'Alexander Heffernan'];
+const avatar = login => `demo/${login.toLowerCase()}.jpg`;
+const person = ([login, name]) => ({ login, name, avatarUrl: avatar(login) });
 
 function profile(login, name, from, through) {
   const days = calendar(login, from, through);
   return {
-    login, name, avatarUrl: '',
+    login, name, avatarUrl: avatar(login),
     contributionsCollection: {
       contributionYears: [2026, 2025, 2024, 2023],
       restrictedContributionsCount: 0,
@@ -85,31 +90,35 @@ async function preview(command, args) {
     case 'github_connect': return null;
     case 'launch_at_login': return false;
     case 'set_launch_at_login': return args.enabled;
-    case 'load_state': return { preferences: previewPrefs ?? { modules: ['today', 'streak', 'heatmap', 'favourites', 'leaderboard'], hidden: ['records', 'people', 'years'], favourites: ['torvalds', 'gaearon', 'yyx990803'] }, migrated: false, cache: null };
+    case 'load_state': return { preferences: previewPrefs ?? { modules: ['today', 'streak', 'heatmap', 'favourites', 'leaderboard'], hidden: ['records', 'people', 'years'], favourites: ['hanasato', 'leomartins', 'julespark'] }, migrated: false, cache: null };
     case 'save_preferences': previewPrefs = args.preferences; return null;
     case 'celebrate': if (parent !== window) parent.postMessage({ gitgaze: 'celebrate', args }, location.origin); return null;
     case 'github_query': {
       const { query, variables } = args;
       if (query.includes('organizations(')) return { viewer: { organizations: { nodes: [{ id: 'O_1', login: 'acme', name: 'Acme Labs', avatarUrl: '' }, { id: 'O_2', login: 'octo-collective', name: 'Octo Collective', avatarUrl: '' }] } } };
       if (query.includes('membersWithRole')) {
-        const members = [['you', 'You'], ...sample.slice(0, 11)];
+        const members = [me, ...sample.slice(0, 11)];
+        return { organization: { membersWithRole: { totalCount: members.length, pageInfo: { hasNextPage: false, endCursor: null },
+          nodes: members.map(([login, name]) => ({ id: `U_${login}`, login, name, avatarUrl: avatar(login) })) } } };
+      }
+      if (query.includes('nodes(ids:')) {
         const span = Math.max(1, Math.round((Date.now() - Date.parse(variables.from)) / 86400000));
-        return { organization: { membersWithRole: { totalCount: members.length, pageInfo: { hasNextPage: false, endCursor: null }, nodes: members.map(([login, name]) => {
-          const next = random([...login + variables.org].reduce((sum, c) => (sum * 31 + c.charCodeAt(0)) >>> 0, 3));
+        return { nodes: variables.ids.map(id => {
+          const next = random([...id + variables.org].reduce((sum, c) => (sum * 31 + c.charCodeAt(0)) >>> 0, 3));
           const total = Math.floor(next() * 6 * span);
-          return { login, name, avatarUrl: '', contributionsCollection: { totalCommitContributions: total, totalIssueContributions: 0, totalPullRequestContributions: Math.floor(total / 4), totalPullRequestReviewContributions: 0 } };
-        }) } } };
+          return { id, contributionsCollection: { totalCommitContributions: total, totalIssueContributions: 0, totalPullRequestContributions: Math.floor(total / 4), totalPullRequestReviewContributions: 0 } };
+        }) };
       }
       if (query.includes('following(')) return { viewer: { following: { nodes: sample.map(person), pageInfo: { hasNextPage: false, endCursor: null } } } };
       if (variables.from) {
         const year = variables.from.slice(0, 4);
-        return { user: profile('you', 'You', `${year}-01-01`, `${year}-12-31` < today ? `${year}-12-31` : today) };
+        return { user: profile(...me, `${year}-01-01`, `${year}-12-31` < today ? `${year}-12-31` : today) };
       }
       if (variables.login) {
         const match = sample.find(([login]) => login === variables.login) ?? [variables.login, variables.login];
         return { user: profile(match[0], match[1], yearAgo, today) };
       }
-      return { viewer: profile('you', 'You', yearAgo, today) };
+      return { viewer: profile(...me, yearAgo, today) };
     }
     default: return null; // Tray, celebration, cache and window commands do nothing in a browser.
   }

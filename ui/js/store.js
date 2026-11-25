@@ -260,6 +260,8 @@ export class Store {
     const update = patch => { if (generation === this.#session) { this.board = { ...this.board, ...patch }; this.changed(); } };
     update({ loading: true, error: null });
     try {
+      // After the scope is added, the CLI may hold a new token, so a refresh reads it again.
+      if (force && this.board.result?.privateHidden) await github.connect();
       const organizations = this.board.organizations && !force ? this.board.organizations : await leaderboard.organizations();
       update({ organizations });
       const organization = organizations.find(o => o.login === this.prefs.leaderboardOrg) ?? organizations[0];

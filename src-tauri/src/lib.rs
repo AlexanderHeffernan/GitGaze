@@ -282,6 +282,7 @@ pub fn run() {
             github::gh_installed,
             github::github_connect,
             github::github_query,
+            github::github_scopes,
             storage::load_state,
             storage::save_preferences,
             storage::save_cache,

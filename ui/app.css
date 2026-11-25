@@ -266,3 +266,6 @@ footer .quiet { padding: 4px 7px; }
   .face { transform: none !important; }
   .refresh.spinning .icon { animation: none; }
 }
+
+.scope-note { margin-top: 6px; }
+.scope-note code { font: 10px ui-monospace, "SF Mono", Menlo, Consolas, monospace; user-select: text; -webkit-user-select: text; cursor: text; }

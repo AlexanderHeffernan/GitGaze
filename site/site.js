@@ -124,9 +124,20 @@ function place() {
   if (doc) doc.style.setProperty('--arrow-x', `${center - left}px`);
 }
 
+/**
+ * Scales the desktop so it fits the column on phones and, beside the copy, fits the window's
+ * height together with its controls, so the whole demo shows without scrolling.
+ */
 function fit() {
-  const available = stage.parentElement.clientWidth;
-  stage.style.zoom = available < 420 ? String(available / 420) : '';
+  const demo = stage.parentElement, height = 692;
+  let zoom = Math.min(1, demo.clientWidth / 420);
+  if (matchMedia('(min-width: 981px)').matches) {
+    const hero = $('.hero'), style = getComputedStyle(hero);
+    const top = hero.getBoundingClientRect().top + scrollY + parseFloat(style.paddingTop);
+    const below = $('.controls').offsetHeight + parseFloat(getComputedStyle(demo).rowGap) + parseFloat(style.paddingBottom);
+    zoom = Math.min(zoom, Math.max(0.6, (innerHeight - top - below) / height));
+  }
+  stage.style.zoom = zoom < 1 ? zoom.toFixed(3) : '';
   place();
 }
 addEventListener('resize', fit);

@@ -6,8 +6,9 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 
+/// The CLI token, and the OAuth scopes GitHub last reported for it (absent for fine-grained tokens).
 #[derive(Default)]
-pub struct Session(Mutex<Option<String>>);
+pub struct Session(Mutex<Option<String>>, Mutex<Option<String>>);
 
 pub fn command(program: impl AsRef<std::ffi::OsStr>) -> Command {
     #[allow(unused_mut)]
@@ -81,6 +82,9 @@ pub async fn github_query(session: tauri::State<'_, Session>, query: String, var
         .send()
         .await
         .map_err(|_| "GitHub did not respond. Check your connection.".to_string())?;
+    if let Some(scopes) = response.headers().get("x-oauth-scopes").and_then(|value| value.to_str().ok()) {
+        *session.1.lock().unwrap() = Some(scopes.to_string());
+    }
     match response.status().as_u16() {
         200 => {}
         401 => return Err("Your GitHub CLI session expired. Run gh auth login, then relaunch GitGaze.".into()),
@@ -94,4 +98,10 @@ pub async fn github_query(session: tauri::State<'_, Session>, query: String, var
         return Err(message.to_string());
     }
     Ok(body["data"].clone())
+}
+
+/// Private-repository contributions are only counted for tokens with read:user (or user).
+#[tauri::command]
+pub fn github_scopes(session: tauri::State<'_, Session>) -> Option<String> {
+    session.1.lock().unwrap().clone()
 }

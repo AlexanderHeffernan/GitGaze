@@ -8,7 +8,7 @@ import { offset, weekStart } from './stats.js';
 import { palettes, title, parseHex, accent, gold, background, systemDark, accentRGB } from './theme.js';
 import { figures, drawLabel, drawTrayIcon, tooltip, menuStyles } from './status.js';
 import { displayName } from './github.js';
-import { periods, memberLimit } from './leaderboard.js';
+import { periods, memberLimit, scopeCommand } from './leaderboard.js';
 
 const store = new Store();
 window.gitgaze = store; // For debugging and UI tests.
@@ -190,7 +190,8 @@ function YearCard({ stats }) {
 
 function Avatar({ person, size = 27 }) {
   const [failed, setFailed] = useState(false);
-  const valid = native && /^https:\/\/avatars\.githubusercontent\.com\//.test(person.avatarUrl ?? '');
+  // GitHub avatars in the app; the bundled sample faces in browser previews.
+  const valid = native ? /^https:\/\/avatars\.githubusercontent\.com\//.test(person.avatarUrl ?? '') : /^demo\/[a-z]+\.jpg$/.test(person.avatarUrl ?? '');
   return html`<span class="avatar" style=${{ width: `${size}px`, height: `${size}px` }}>${valid && !failed
     ? html`<img src=${person.avatarUrl} alt="" referrerpolicy="no-referrer" onError=${() => setFailed(true)} />`
     : person.login[0].toUpperCase()}</span>`;
@@ -270,7 +271,8 @@ function LeaderboardCard() {
         <span class="board-bar"><span style=${{ width: `${(row.count / maximum) * 100}%` }} /></span>
         <span class="board-count">${num(row.count)}</span></div>`)}</div>
       ${rows.length > limit && html`<button class="quiet more" onClick=${() => setLimit(limit + 10)}>Show more</button>`}
-      ${result.partial && html`<div class="tiny secondary">Ranked from the first ${memberLimit} of ${num(result.total)} members.</div>`}`;
+      ${result.partial && html`<div class="tiny secondary">Ranked from the first ${memberLimit} of ${num(result.total)} members.</div>`}
+      ${result.privateHidden && html`<div class="tiny secondary scope-note">Private repositories aren’t counted yet. Run <code>${scopeCommand}</code> in a terminal, approve it, then refresh.</div>`}`;
   };
   return html`<${Card}><div class="row"><${Heading}>LEADERBOARD<//><span class="spacer" />
     <span class="caption">${result ? `${result.organization.name || result.organization.login} · ${period}` : period}</span></div>
