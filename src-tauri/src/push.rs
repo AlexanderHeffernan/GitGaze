@@ -68,14 +68,14 @@ fn git_config(arguments: &[&str], allow_missing: bool) -> Result<String, String>
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
-/// Changes only GitGaze's exact value; an existing tracing setup is never overwritten.
+/// Changes only Stoke's exact value; an existing tracing setup is never overwritten.
 pub fn configure(monitor: &Monitor, enabled: bool, on_push: OnPush) -> Result<(), String> {
     let target = platform::target();
     let existing: Vec<String> =
         git_config(&["--get-all", "trace2.eventTarget"], true)?.lines().map(str::to_string).collect();
     if enabled {
         if !(existing.is_empty() || existing == [target.clone()]) {
-            return Err("Git already has a Trace2 event target. GitGaze left it unchanged.".into());
+            return Err("Git already has a Trace2 event target. Stoke left it unchanged.".into());
         }
         monitor.start(on_push)?;
         if existing.is_empty() {
@@ -158,7 +158,7 @@ mod platform {
                 .write(true)
                 .open(directory.join("listener.lock"))
                 .map_err(|error| error.to_string())?;
-            lock.try_lock().map_err(|_| "Another GitGaze push listener is already running.".to_string())?;
+            lock.try_lock().map_err(|_| "Another Stoke push listener is already running.".to_string())?;
             let path = socket();
             let _ = std::fs::remove_file(&path);
             let socket = UnixDatagram::bind(&path).map_err(|_| "Couldn't bind the Git event socket.".to_string())?;
@@ -212,11 +212,11 @@ mod platform {
     impl Listener {
         pub fn start(on_push: OnPush) -> Result<Self, String> {
             let name = target();
-            // The first instance fails if another GitGaze already listens, like the macOS lock.
+            // The first instance fails if another Stoke already listens, like the macOS lock.
             let first = tauri::async_runtime::block_on(async {
                 ServerOptions::new().first_pipe_instance(true).create(&name)
             })
-            .map_err(|_| "Another GitGaze push listener is already running.".to_string())?;
+            .map_err(|_| "Another Stoke push listener is already running.".to_string())?;
             let events = Arc::new(Mutex::new(PushEvents::default()));
             let mut first = Some(first);
             let tasks = (0..WAITING)

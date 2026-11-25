@@ -1,4 +1,4 @@
-# Contributing to GitGaze
+# Contributing to Stoke
 
 Small, private, and motivating is the goal. Bug fixes, accessibility improvements, and focused additions are welcome. Discuss substantial product changes in an issue before building them.
 
@@ -24,7 +24,7 @@ npm run build
 
 Keep changes focused and use the shared controls so widgets and Settings stay consistent. Add regression coverage for observable behaviour rather than implementation details. Contribution counts must continue to come from GitHub's API calendar; a successful push is only a refresh hint. Do not add repository write access just to display activity.
 
-For visual changes, check light and dark appearance and states such as empty activity, loading, and reduced motion. `npm run preview` serves the UI with deterministic sample data at <http://localhost:5175/?platform=macos> (or `?platform=windows`), which is quick for layout work; then check the real app with `npm run dev`. Running the built app again while it is open shows the flyout, and `GitGaze --celebrate` previews a celebration.
+For visual changes, check light and dark appearance and states such as empty activity, loading, and reduced motion. `npm run preview` serves the UI with deterministic sample data at <http://localhost:5175/?platform=macos> (or `?platform=windows`), which is quick for layout work; then check the real app with `npm run dev`. Running the built app again while it is open shows the flyout, and `Stoke --celebrate` previews a celebration.
 
 ## Marketing site
 
@@ -52,7 +52,7 @@ Merged changes to `main` go live at <https://gitgaze.alexheffernan.dev> within a
 - Never commit tokens, signing identities, `.env` files, local caches, or raw Git traces.
 - Review screenshots before sharing: graphs, usernames, avatars, and private contribution totals may identify you or people you follow. `npm run dev` uses your real account; the preview uses sample data.
 - Use synthetic contribution data in tests. Do not copy an authenticated API response into a fixture without sanitising it.
-- Bug reports should include your OS version and GitGaze version, reproducible steps, and redacted errors—not credentials or complete personal cache files.
+- Bug reports should include your OS version and Stoke version, reproducible steps, and redacted errors—not credentials or complete personal cache files.
 - Report security concerns privately to the repository maintainer rather than disclosing usable credentials or exploits in a public issue.
 
 ## Distribution

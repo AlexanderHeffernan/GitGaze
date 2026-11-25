@@ -1,5 +1,5 @@
 //! Reads the GitHub CLI's active github.com session into memory and runs GraphQL queries with it.
-//! The token never reaches the web view, disk, or logs. GitGaze never signs in or out of the CLI.
+//! The token never reaches the web view, disk, or logs. Stoke never signs in or out of the CLI.
 
 use serde_json::{json, Value};
 use std::path::PathBuf;
@@ -65,7 +65,7 @@ fn client() -> &'static reqwest::Client {
     static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
     CLIENT.get_or_init(|| {
         reqwest::Client::builder()
-            .user_agent("GitGaze/1.1")
+            .user_agent("Stoke/1.1")
             .timeout(std::time::Duration::from_secs(30))
             .build()
             .expect("HTTP client")
@@ -87,7 +87,7 @@ pub async fn github_query(session: tauri::State<'_, Session>, query: String, var
     }
     match response.status().as_u16() {
         200 => {}
-        401 => return Err("Your GitHub CLI session expired. Run gh auth login, then relaunch GitGaze.".into()),
+        401 => return Err("Your GitHub CLI session expired. Run gh auth login, then relaunch Stoke.".into()),
         403 | 429 => {
             return Err("GitHub is limiting requests. Your saved contributions are still here; try again later.".into())
         }

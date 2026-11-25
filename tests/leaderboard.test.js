@@ -65,3 +65,13 @@ for (const [label, tokenScopes] of [['GitHub’s exact counts with read:user', '
     else assert.deepEqual(calls.sort(), ['history:busy:10', 'history:busy:10', 'history:busy:3', 'repositories', 'search:23', 'search:23', 'search:23']);
   });
 }
+
+test('today and this week are counted from repositories even with read:user, to the exact local hour', async () => {
+  scopes = 'gist, read:org, read:user, repo'; timeouts = 0; calls = [];
+  for (const period of ['today', 'week']) {
+    const result = await standings({ login: 'acme', id: 'O1' }, period, new Date(2026, 10, 25, 8, 47), 10, 2);
+    assert.equal(result.exact, false);
+    assert.equal(result.scoped, true);
+  }
+  assert.ok(!calls.some(call => call.startsWith('contributions')));
+});

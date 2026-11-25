@@ -21,7 +21,7 @@ export const moduleTitles = {
 
 const defaults = {
   modules, hidden: ['momentum', 'records', 'people', 'years', 'leaderboard'], favourites: [], favouriteOrder: [],
-  palette: 'violet', customLight: '6E4AC9', customDark: 'B09CFF', menuStyle: 'charge', menuStreak: false,
+  palette: 'green', customLight: '1A7F3D', customDark: '40C463', menuStyle: 'charge', menuStreak: false,
   appearance: 'system', notifications: false, visualCelebrations: true, celebrationStyle: 'fireworks',
   streakReminder: false, reminderHour: 18, lastReminderDay: null, detectPushes: false,
   historyWeeks: 53, comparisonYear: 0, comparisonMode: 'ytd', leaderboardOrg: null, leaderboardPeriod: 'week', autoUpdate: true, lastUpdateCheck: 0,
@@ -467,11 +467,11 @@ export class Store {
     try {
       const update = await updater.check();
       if (!update) {
-        if (manual) await dialog.message('You\'re running the latest version of GitGaze.', { title: 'GitGaze is up to date' });
+        if (manual) await dialog.message('You\'re running the latest version of Stoke.', { title: 'Stoke is up to date' });
         return;
       }
-      const install = await dialog.ask(`GitGaze ${update.version} is available. You have ${update.currentVersion}.`,
-        { title: 'A new version of GitGaze is available', okLabel: 'Install and Relaunch', cancelLabel: 'Later' });
+      const install = await dialog.ask(`Stoke ${update.version} is available. You have ${update.currentVersion}.`,
+        { title: 'A new version of Stoke is available', okLabel: 'Install and Relaunch', cancelLabel: 'Later' });
       if (!install) return;
       await update.downloadAndInstall();
       await plugin('process').relaunch();

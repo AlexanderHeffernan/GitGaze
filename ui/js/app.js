@@ -8,6 +8,7 @@ import { offset, weekStart } from './stats.js';
 import { palettes, title, parseHex, accent, gold, background, systemDark, accentRGB } from './theme.js';
 import { figures, drawLabel, drawTrayIcon, tooltip, menuStyles } from './status.js';
 import { displayName } from './github.js';
+import { markSVG } from './mark.js';
 import { periods, memberLimit, scopeCommand } from './leaderboard.js';
 
 const store = new Store();
@@ -320,7 +321,7 @@ function WidgetOptions({ module }) {
           : html`<div class="small secondary">${store.board.loading ? 'Finding your organisations…' : 'No organisations found for this account.'}</div>`}
         <${ChoiceStrip} label="Period" value=${prefs.leaderboardPeriod} options=${periods} onChange=${period => choose({ leaderboardPeriod: period })} />
         <div class="tiny secondary">Counts commits, pull requests, reviews and issues in the organisation’s repositories you can see, private ones included.</div>
-        ${store.board.result && !store.board.result.exact && html`<${ScopeTip} />`}</div>`;
+        ${store.board.result && !store.board.result.scoped && html`<${ScopeTip} />`}</div>`;
     }
   }
   return null;
@@ -418,7 +419,7 @@ function HexField({ label, value, onChange }) {
 }
 
 async function confirmPushDetection() {
-  const message = 'Adds Git\'s trace2.eventTarget setting to your user configuration. Events stay on this computer, in memory. Turning this off removes only GitGaze\'s setting. Clients that bypass Git aren\'t covered.';
+  const message = 'Adds Git\'s trace2.eventTarget setting to your user configuration. Events stay on this computer, in memory. Turning this off removes only Stoke\'s setting. Clients that bypass Git aren\'t covered.';
   const dialog = plugin('dialog');
   if (!dialog) return window.confirm(message);
   return dialog.ask(message, { title: 'Enable push detection across repositories?', okLabel: 'Enable Git integration', cancelLabel: 'Cancel' });
@@ -436,16 +437,13 @@ function Settings() {
   return html`<div class="settings">
     <${Card}><${Heading}>APPEARANCE<//>
       <div class="appearances">${appearance('system', 'Auto', 'contrast')}${appearance('light', 'Light', 'sun')}${appearance('dark', 'Dark', 'moon')}</div>
-      <div class="palettes">${Object.keys(palettes).map(name => {
-        const [l, d] = palettes[name].map(c => `rgb(${c.map(v => Math.round(v * 255)).join(' ')})`);
+      <div class="palettes">${[...Object.keys(palettes), 'custom'].map(name => {
+        const swatch = accent({ ...prefs, palette: name }, isDark());
         const selected = prefs.palette === name;
         return html`<button class=${`tile palette ${selected ? 'selected' : ''}`} title=${title(name)} aria-label=${`${title(name)} theme`} aria-pressed=${selected}
-          style=${{ '--swatch': isDark() ? d : l }} onClick=${() => store.set({ palette: name })}>
+          style=${{ '--swatch': swatch }} onClick=${() => store.set({ palette: name })}>
           <span class="swatch">${selected && html`<${Icon} name="check" size=${9} />`}</span><span class="micro-8 secondary">${title(name)}</span></button>`;
       })}</div>
-      <div class="row"><button class=${`quiet custom ${prefs.palette === 'custom' ? 'accent' : ''}`} onClick=${() => store.set({ palette: 'custom' })}>
-        <${Icon} name=${prefs.palette === 'custom' ? 'paletteOn' : 'palette'} /> Custom theme</button><span class="spacer" />
-        <span class="custom-swatch" style=${{ background: accent({ ...prefs, palette: 'custom' }, isDark()) }} /></div>
       ${prefs.palette === 'custom' && html`<div class="hex-fields"><${HexField} label="Light accent" value=${prefs.customLight} onChange=${v => store.set({ customLight: v })} />
         <${HexField} label="Dark accent" value=${prefs.customDark} onChange=${v => store.set({ customDark: v })} /></div>`}<//>
     <${Card}><${Heading}>${store.platform === 'windows' ? 'TRAY ICON' : 'MENU BAR'}<//>
@@ -540,7 +538,8 @@ function Dashboard() {
   const go = next => () => { store.page = next; store.changed(); };
   return html`<div class="panel">
     <header>
-      <h1>${page === 'settings' ? 'Settings' : page === 'gallery' ? 'Add widgets' : 'GitGaze'}</h1><span class="spacer" />
+      ${page === 'dashboard' && html`<span class="logo" dangerouslySetInnerHTML=${{ __html: markSVG(accentRGB(store.prefs, isDark()), { size: 17 }) }} />`}
+      <h1>${page === 'settings' ? 'Settings' : page === 'gallery' ? 'Add widgets' : 'Stoke'}</h1><span class="spacer" />
       ${page !== 'dashboard'
         ? html`<button class="quiet back-button" onClick=${go('dashboard')}><${Icon} name="back" /> Back</button>`
         : html`<${IconButton} icon="plus" label="Add widgets" onClick=${go('gallery')} />

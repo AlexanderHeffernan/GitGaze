@@ -1,11 +1,15 @@
-# GitGaze
+<img src="site/mark.svg" width="72" alt="">
+
+# Stoke
 
 [![Check & Release](https://github.com/AlexanderHeffernan/GitGaze/actions/workflows/check.yml/badge.svg)](https://github.com/AlexanderHeffernan/GitGaze/actions/workflows/check.yml)
 [![Latest release](https://img.shields.io/github/v/release/AlexanderHeffernan/GitGaze)](https://github.com/AlexanderHeffernan/GitGaze/releases/latest)
 
 **Your GitHub momentum, in your menu bar or system tray.**
 
-GitGaze is a small macOS menu-bar and Windows tray app for keeping your contribution streak alive, chasing your personal bests, and seeing what the people you follow are building. It counts GitHub contributions—not just commits—including private activity available to your account.
+Stoke was called GitGaze until version 1.1.7. Existing installs update to Stoke automatically and keep their settings and history.
+
+Stoke is a small macOS menu-bar and Windows tray app for keeping your contribution streak alive, chasing your personal bests, and seeing what the people you follow are building. It counts GitHub contributions—not just commits—including private activity available to your account.
 
 One codebase builds both apps: the dashboard is a bundled web UI, and a small [Tauri](https://tauri.app/) shell in Rust provides the tray item, notifications, launch at login, push detection, and signed updates. No subscriptions, analytics, or backend.
 
@@ -16,13 +20,13 @@ One codebase builds both apps: the dashboard is a bundled web UI, and a small [T
 - **Your people, at a glance.** Order favourites, see their daily/weekly/monthly/yearly contributions, and expand their graphs with a click.
 - **Compare your years.** Compare cumulative contributions with a previous year, either to the same calendar date or the full year's total.
 - **Celebrations that mean something.** Fireworks, Supernova, and Meteor shower particles form the actual contribution increase. Celebrations happen only after GitHub confirms new activity—not just because a push succeeded.
-- **Make it yours.** Ten palettes, custom light/dark accent colours, and automatic, light, or dark appearance. Respects reduced motion.
+- **Make it yours.** Eleven palettes, custom light/dark accent colours, and automatic, light, or dark appearance. Respects reduced motion.
 - **Optional streak reminders, milestone notifications, and launch at login.** No arbitrary daily target.
 - **Faster updates after a push.** Optional user-wide Git integration, without choosing folders or adding repository hooks. Cached activity stays available offline.
 
 ## Get started
 
-GitGaze reads your [GitHub CLI](https://cli.github.com/) session, so install it and sign in first: `gh auth login --hostname github.com`.
+Stoke reads your [GitHub CLI](https://cli.github.com/) session, so install it and sign in first: `gh auth login --hostname github.com`.
 
 ### macOS
 
@@ -32,7 +36,7 @@ Requires **macOS 14+**; release builds are universal (Apple Silicon and Intel). 
 curl -fsSL https://raw.githubusercontent.com/AlexanderHeffernan/GitGaze/main/install.sh | bash
 ```
 
-Or [download GitGaze.zip](https://github.com/AlexanderHeffernan/GitGaze/releases/latest/download/GitGaze.zip), unzip it, and move **GitGaze.app** into Applications. The installer uses `~/Applications`, requires no administrator access, and does not clear macOS quarantine.
+Or [download Stoke.zip](https://github.com/AlexanderHeffernan/GitGaze/releases/latest/download/Stoke.zip), unzip it, and move **Stoke.app** into Applications. The installer uses `~/Applications`, requires no administrator access, and does not clear macOS quarantine.
 
 **Apple signing status:** without configured Developer ID credentials, releases are ad-hoc signed and not notarised. macOS may block a browser-downloaded first installation. Use System Settings → Privacy & Security → Open Anyway only if you trust the release, or build from source.
 
@@ -44,19 +48,19 @@ Requires **Windows 10 or 11** (x64 or ARM64) and the Edge WebView2 runtime, whic
 irm https://raw.githubusercontent.com/AlexanderHeffernan/GitGaze/main/install.ps1 | iex
 ```
 
-Or download the installer for [x64](https://github.com/AlexanderHeffernan/GitGaze/releases/latest/download/GitGaze-windows-x64-setup.exe) or [ARM64](https://github.com/AlexanderHeffernan/GitGaze/releases/latest/download/GitGaze-windows-arm64-setup.exe). It installs for the current user without administrator access. GitGaze appears in the notification area; Windows may hide new icons in the overflow until you pin it. The installer isn't code-signed yet, so SmartScreen may ask you to confirm.
+Or download the installer for [x64](https://github.com/AlexanderHeffernan/GitGaze/releases/latest/download/Stoke-windows-x64-setup.exe) or [ARM64](https://github.com/AlexanderHeffernan/GitGaze/releases/latest/download/Stoke-windows-arm64-setup.exe). It installs for the current user without administrator access. Stoke appears in the notification area; Windows may hide new icons in the overflow until you pin it. The installer isn't code-signed yet, so SmartScreen may ask you to confirm.
 
 ### Updates
 
-GitGaze checks for new releases about every six hours. Use **Settings → Updates → Check now**, or right-click the tray item and select **Check for Updates…**. Updates install in place and relaunch only when you agree. Every update is Ed25519-signed and verified against the key built into the app before it installs. Installs of 1.0.x receive this version through their existing Sparkle updater, which keeps their preferences and offline history.
+Stoke checks for new releases about every six hours. Use **Settings → Updates → Check now**, or right-click the tray item and select **Check for Updates…**. Updates install in place and relaunch only when you agree. Every update is Ed25519-signed and verified against the key built into the app before it installs. Installs of 1.0.x receive this version through their existing Sparkle updater, which keeps their preferences and offline history.
 
-GitGaze reads your existing CLI session automatically. It **does not log you into or out of GitHub CLI**, change your CLI credentials, or store your token. To change accounts, run `gh auth switch` and relaunch GitGaze. The app uses the CLI session's existing permissions; it does not request additional scopes or write to repositories. GitHub Enterprise hosts are not currently supported.
+Stoke reads your existing CLI session automatically. It **does not log you into or out of GitHub CLI**, change your CLI credentials, or store your token. To change accounts, run `gh auth switch` and relaunch Stoke. The app uses the CLI session's existing permissions; it does not request additional scopes or write to repositories. GitHub Enterprise hosts are not currently supported.
 
 ## How contributions are counted
 
-GitHub's GraphQL `contributionCalendar` is the source of truth. GitGaze doesn't sum push events, read local repositories, or scrape profile pages. Private activity is subject to GitHub's visibility and organisation policies; restricted counts are not added to the calendar a second time.
+GitHub's GraphQL `contributionCalendar` is the source of truth. Stoke doesn't sum push events, read local repositories, or scrape profile pages. Private activity is subject to GitHub's visibility and organisation policies; restricted counts are not added to the calendar a second time.
 
-“Today” selects the current local calendar date from GitHub's existing date buckets. Historical contributions are not shifted into your local timezone. **Exact parity with the website is not guaranteed:** authenticated API calendars and web-profile graphs can differ in totals or day assignments. GitGaze preserves the supported API result rather than inventing adjustments. GitHub may also take time to process new contributions.
+“Today” selects the current local calendar date from GitHub's existing date buckets. Historical contributions are not shifted into your local timezone. **Exact parity with the website is not guaranteed:** authenticated API calendars and web-profile graphs can differ in totals or day assignments. Stoke preserves the supported API result rather than inventing adjustments. GitHub may also take time to process new contributions.
 
 Streaks and records are calculated from that API calendar:
 
@@ -69,17 +73,17 @@ Activity refreshes on opening if older than 30 seconds, approximately every five
 
 ## Automatic push detection
 
-Enable **Settings → General → Detect pushes automatically** to opt in. GitGaze adds a `trace2.eventTarget` value to your **user-wide Git configuration**, pointing to a private Unix datagram socket on macOS or a per-user named pipe on Windows. Git's built-in [Trace2](https://git-scm.com/docs/api-trace2) events let it notice successful `git push` completion across repositories. There are no hooks, folder permissions, root permissions, process polling, or network interception.
+Enable **Settings → General → Detect pushes automatically** to opt in. Stoke adds a `trace2.eventTarget` value to your **user-wide Git configuration**, pointing to a private Unix datagram socket on macOS or a per-user named pipe on Windows. Git's built-in [Trace2](https://git-scm.com/docs/api-trace2) events let it notice successful `git push` completion across repositories. There are no hooks, folder permissions, root permissions, process polling, or network interception.
 
 A successful push starts an immediate profile refresh and bounded retries over roughly three minutes. Local commits, fetches, and failed pushes don't trigger detection. A successful push to another host, an up-to-date push, or a dry-run push may trigger a harmless refresh; **only a GitHub-confirmed increase celebrates**.
 
 This covers Git processes using your user configuration—not other machines, website changes, clients with independent Git implementations, or configuration overrides. GitHub processing may outlast the retry burst; normal background refresh remains the fallback. The app must be running.
 
-Raw trace events can contain command arguments and local paths. GitGaze processes events in memory, retaining only bounded push session identifiers until completion; it does not save raw traces or repository metadata. The macOS socket directory is owner-only. Existing unrelated tracing targets are never overwritten. Turning detection off removes only this app's exact setting.
+Raw trace events can contain command arguments and local paths. Stoke processes events in memory, retaining only bounded push session identifiers until completion; it does not save raw traces or repository metadata. The macOS socket directory is owner-only. Existing unrelated tracing targets are never overwritten. Turning detection off removes only this app's exact setting.
 
 ### Uninstalling
 
-First disable push detection and launch at login in Settings, then quit GitGaze. On macOS, remove its app bundle; on Windows, uninstall it from Settings → Apps. If needed, remove just its Git integration manually:
+First disable push detection and launch at login in Settings, then quit Stoke. On macOS, remove its app bundle; on Windows, uninstall it from Settings → Apps. If needed, remove just its Git integration manually:
 
 ```sh
 # macOS
@@ -89,7 +93,7 @@ git config --global --fixed-value --unset-all trace2.eventTarget \
 git config --global --fixed-value --unset-all trace2.eventTarget "\\.\pipe\gitgaze-push-$env:USERNAME"
 ```
 
-The `GitBar` paths and `app.gitbar.mac` identifier are intentional: they predate the current name and remain stable so existing preferences, offline history, and Git integration survive upgrades.
+The `GitBar` and `GitGaze` paths, the `gitgaze-push` pipe and the `app.gitbar.mac` identifier are intentional: they predate the current name and remain stable so existing preferences, offline history, and Git integration survive upgrades.
 
 ## Privacy and local data
 
@@ -97,7 +101,7 @@ Authenticated API requests go directly to `api.github.com`; profile pictures loa
 
 | Data | macOS | Windows |
 | --- | --- | --- |
-| GitHub token | Read from `gh auth token --hostname github.com` into memory; never written by GitGaze | Same |
+| GitHub token | Read from `gh auth token --hostname github.com` into memory; never written by Stoke | Same |
 | Contribution and profile cache | `~/Library/Application Support/GitBar/dashboard.json` (owner-only) | `%APPDATA%\GitGaze\dashboard.json` |
 | Layout, favourites, and appearance | `~/Library/Application Support/GitBar/preferences.json` | `%APPDATA%\GitGaze\preferences.json` |
 | Optional push listener | `~/Library/Caches/GitBar/` socket (owner-only); no trace log | Per-user named pipe; no trace log |
@@ -112,7 +116,7 @@ Requires Node.js 20+, a stable Rust toolchain, and the [Tauri prerequisites](htt
 npm ci
 npm test                 # contribution maths and UI logic
 npm run dev              # run the app with live UI reloading
-npm run build            # build GitGaze.app or the Windows installer
+npm run build            # build Stoke.app or the Windows installer
 npm run preview          # the UI in a browser with sample data, at http://localhost:5175
 ```
 

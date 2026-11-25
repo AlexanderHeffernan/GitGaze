@@ -228,6 +228,6 @@ export function drawTrayIcon(canvas, f, { prefs, dark }) {
 }
 
 export function tooltip(store) {
-  if (!store.dashboard) return 'GitGaze · Connect GitHub CLI';
-  return `GitGaze · ${store.stats?.todayCount ?? 0} contributions today · ${store.stats?.currentStreak ?? 0}-day streak · ${menuStyles[store.prefs.menuStyle] ?? menuStyles.charge}`;
+  if (!store.dashboard) return 'Stoke · Connect GitHub CLI';
+  return `Stoke · ${store.stats?.todayCount ?? 0} contributions today · ${store.stats?.currentStreak ?? 0}-day streak · ${menuStyles[store.prefs.menuStyle] ?? menuStyles.charge}`;
 }

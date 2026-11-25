@@ -135,8 +135,11 @@ async function repositoryCounts(organization, people, { from, to }, batch, paral
 export async function standings(organization, period, now = new Date(), batch = 10, parallel = 4) {
   const { found, total } = await members(organization.login);
   const variables = { from: periodStart(period, now), to: now.toISOString() };
-  const exact = await exactCounts();
+  const scoped = await exactCounts();
+  // GitHub's contribution counts ignore the time of day and cover whole UTC dates, which away
+  // from UTC shifts a day or week by up to half a day. Repositories honour exact times.
+  const exact = scoped && !['today', 'week'].includes(period);
   const counts = await (exact ? contributionCounts : repositoryCounts)(organization, found, variables, batch, parallel);
   const rows = found.map(({ id, login, name, avatarUrl }) => ({ login, ...(name ? { name } : {}), avatarUrl, count: counts.get(id) ?? 0 }));
-  return { rows: rank(rows), total, partial: total > found.length, exact };
+  return { rows: rank(rows), total, partial: total > found.length, exact, scoped };
 }

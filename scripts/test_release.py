@@ -20,10 +20,10 @@ class ReleaseTests(unittest.TestCase):
     def test_feed_requires_signed_pinned_version_and_matching_archive_length(self):
         with tempfile.TemporaryDirectory() as path:
             directory = Path(path)
-            (directory / "GitGaze.zip").write_bytes(b"archive")
+            (directory / "Stoke.zip").write_bytes(b"archive")
             xml = '''<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"><channel><item>
               <sparkle:version>1.2.3</sparkle:version><enclosure length="7" sparkle:edSignature="sample"
-              url="https://github.com/AlexanderHeffernan/GitGaze/releases/download/v1.2.3/GitGaze.zip" />
+              url="https://github.com/AlexanderHeffernan/GitGaze/releases/download/v1.2.3/Stoke.zip" />
               </item></channel></rss>'''
             feed = directory / "appcast.xml"
             feed.write_text(xml)

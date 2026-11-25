@@ -101,13 +101,28 @@ async function preview(command, args) {
         return { organization: { membersWithRole: { totalCount: members.length, pageInfo: { hasNextPage: false, endCursor: null },
           nodes: members.map(([login, name]) => ({ id: `U_${login}`, login, name, avatarUrl: avatar(login) })) } } };
       }
+      // Sample org members' commits over a period, by member and organisation.
+      const commits = (id, org, from) => {
+        const span = Math.max(1, Math.round((Date.now() - Date.parse(from)) / 86400000));
+        const next = random([...id + org].reduce((sum, c) => (sum * 31 + c.charCodeAt(0)) >>> 0, 3));
+        return Math.floor(next() * 6 * span);
+      };
       if (query.includes('nodes(ids:')) {
-        const span = Math.max(1, Math.round((Date.now() - Date.parse(variables.from)) / 86400000));
         return { nodes: variables.ids.map(id => {
-          const next = random([...id + variables.org].reduce((sum, c) => (sum * 31 + c.charCodeAt(0)) >>> 0, 3));
-          const total = Math.floor(next() * 6 * span);
+          const total = commits(id, variables.org, variables.from);
           return { id, contributionsCollection: { totalCommitContributions: total, totalIssueContributions: 0, totalPullRequestContributions: Math.floor(total / 4), totalPullRequestReviewContributions: 0 } };
         }) };
+      }
+      if (query.includes('repositories(')) {
+        return { organization: { repositories: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [{ name: 'app', pushedAt: new Date().toISOString(), defaultBranchRef: { id: 'R_app' } }] } } };
+      }
+      if (query.includes('history(')) {
+        const authors = [...query.matchAll(/(a\d+): history\([^)]*author:\{id:"([^"]+)"\}\)/g)];
+        return { repository: { defaultBranchRef: { target: Object.fromEntries(authors.map(([, alias, id]) => [alias, { totalCount: commits(id, variables.owner, variables.from) }])) } } };
+      }
+      if (query.includes('search(type:ISSUE')) {
+        const searches = [...query.matchAll(/(s\d+): search\(type:ISSUE, first:0, query:"org:(\S+) is:pr author:(\S+) created:(\S+)\+00:00\.\./g)];
+        return Object.fromEntries(searches.map(([, alias, org, login, from]) => [alias, { issueCount: Math.floor(commits(`U_${login}`, org, `${from}Z`) / 4) }]));
       }
       if (query.includes('following(')) return { viewer: { following: { nodes: sample.map(person), pageInfo: { hasNextPage: false, endCursor: null } } } };
       if (variables.from) {

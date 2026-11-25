@@ -213,16 +213,16 @@ fn build_tray(app: &AppHandle) -> tauri::Result<TrayIcon> {
     let menu = Menu::with_items(
         app,
         &[
-            &MenuItem::with_id(app, "open", "Open GitGaze", true, None::<&str>)?,
+            &MenuItem::with_id(app, "open", "Open Stoke", true, None::<&str>)?,
             &MenuItem::with_id(app, "refresh", "Refresh", true, Some("CmdOrCtrl+R"))?,
             &PredefinedMenuItem::separator(app)?,
             &MenuItem::with_id(app, "updates", "Check for Updates…", true, None::<&str>)?,
-            &MenuItem::with_id(app, "quit", "Quit GitGaze", true, Some("CmdOrCtrl+Q"))?,
+            &MenuItem::with_id(app, "quit", "Quit Stoke", true, Some("CmdOrCtrl+Q"))?,
         ],
     )?;
     TrayIconBuilder::with_id(TRAY)
         .icon(app.default_window_icon().cloned().expect("app icon"))
-        .tooltip("GitGaze")
+        .tooltip("Stoke")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
@@ -248,17 +248,41 @@ fn build_tray(app: &AppHandle) -> tauri::Result<TrayIcon> {
         .build(app)
 }
 
+/// Stoke was called GitGaze until 1.1.7. On Windows the installer keys everything on the product
+/// name, so Stoke installs beside GitGaze; this removes GitGaze (keeping its data, which Stoke
+/// shares) and carries over launch at login. Returns whether GitGaze launched at login.
+#[cfg(windows)]
+fn retire_gitgaze() -> bool {
+    let reg_value = |key: &str, name: &str| -> Option<String> {
+        let output = github::command("reg").args(["query", key, "/v", name]).output().ok()?;
+        let text = String::from_utf8_lossy(&output.stdout).into_owned();
+        let value = text.lines().find_map(|line| line.split_once("REG_SZ").map(|(_, value)| value.trim().to_string()))?;
+        Some(value)
+    };
+    let Some(uninstaller) = reg_value(r"HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\GitGaze", "UninstallString") else {
+        return false;
+    };
+    let launched_at_login = reg_value(r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run", "GitGaze").is_some();
+    // A running GitGaze holds the single-instance lock Stoke shares, so stop it first.
+    let _ = github::command("taskkill").args(["/IM", "GitGaze.exe", "/F"]).output();
+    // /S: silent. Without /DELETEAPPDATA the uninstaller leaves the shared settings and cache alone.
+    let _ = github::command(uninstaller.trim_matches('"')).arg("/S").spawn();
+    launched_at_login
+}
+
 pub fn run() {
     let arguments: Vec<String> = std::env::args().collect();
     if arguments.iter().any(|argument| argument == "--listener-smoke-test") {
         return push::smoke_test();
     }
     let smoke = arguments.iter().any(|argument| argument == "--smoke-test");
+    #[cfg(windows)]
+    let keep_launch_at_login = retire_gitgaze();
 
     #[allow(unused_mut)]
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, arguments, _| {
-            // Launching GitGaze again opens the flyout; `--celebrate` previews a celebration (for testing).
+            // Launching Stoke again opens the flyout; `--celebrate` previews a celebration (for testing).
             if arguments.iter().any(|argument| argument == "--celebrate") {
                 let _ = app.emit_to("popover", "preview-celebration", ());
             } else {
@@ -300,8 +324,13 @@ pub fn run() {
         .setup(move |app| {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+            #[cfg(windows)]
+            if keep_launch_at_login {
+                use tauri_plugin_autostart::ManagerExt;
+                let _ = app.autolaunch().enable();
+            }
             if smoke {
-                println!("GitGaze {} launch smoke test passed", app.package_info().version);
+                println!("Stoke {} launch smoke test passed", app.package_info().version);
                 std::process::exit(0);
             }
             let handle = app.handle().clone();
@@ -321,7 +350,7 @@ pub fn run() {
             Ok(())
         })
         .build(tauri::generate_context!())
-        .expect("GitGaze failed to start");
+        .expect("Stoke failed to start");
     app.run(|_, event| {
         // Hiding the flyout must never quit a tray app.
         if let RunEvent::ExitRequested { api, code: None, .. } = event {

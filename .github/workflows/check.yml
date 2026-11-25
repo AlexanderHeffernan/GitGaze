@@ -74,28 +74,28 @@ jobs:
         if: matrix.platform == 'macos'
         run: |
           set -euo pipefail
-          APP=src-tauri/target/universal-apple-darwin/release/bundle/macos/GitGaze.app
-          lipo "$APP/Contents/MacOS/GitGaze" -verify_arch arm64 x86_64
+          APP=src-tauri/target/universal-apple-darwin/release/bundle/macos/Stoke.app
+          lipo "$APP/Contents/MacOS/Stoke" -verify_arch arm64 x86_64
           codesign --verify --deep --strict "$APP"
           test "$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$APP/Contents/Info.plist")" = app.gitbar.mac
           test "$(/usr/libexec/PlistBuddy -c 'Print CFBundleVersion' "$APP/Contents/Info.plist")" = "$VERSION"
-          "$APP/Contents/MacOS/GitGaze" --smoke-test
-          echo "BINARY=$APP/Contents/MacOS/GitGaze" >> "$GITHUB_ENV"
+          "$APP/Contents/MacOS/Stoke" --smoke-test
+          echo "BINARY=$APP/Contents/MacOS/Stoke" >> "$GITHUB_ENV"
           # Archive here: artifact uploads drop the executable bit inside bundles.
           mkdir -p dist
-          ditto -c -k --sequesterRsrc --keepParent "$APP" dist/GitGaze.zip
-          tar -czf dist/GitGaze.app.tar.gz -C "$(dirname "$APP")" GitGaze.app
+          ditto -c -k --sequesterRsrc --keepParent "$APP" dist/Stoke.zip
+          tar -czf dist/Stoke.app.tar.gz -C "$(dirname "$APP")" Stoke.app
       - name: Collect Windows installer
         if: matrix.platform == 'windows'
         run: |
           set -euo pipefail
-          EXE=src-tauri/target/${{ matrix.target }}/release/GitGaze.exe
+          EXE=src-tauri/target/${{ matrix.target }}/release/Stoke.exe
           "$EXE" --smoke-test > smoke.txt
           cat smoke.txt
-          grep -q "GitGaze $VERSION launch smoke test passed" smoke.txt
+          grep -q "Stoke $VERSION launch smoke test passed" smoke.txt
           echo "BINARY=$EXE" >> "$GITHUB_ENV"
           mkdir -p dist
-          cp src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*-setup.exe "dist/GitGaze-windows-${{ matrix.arch }}-setup.exe"
+          cp src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*-setup.exe "dist/Stoke-windows-${{ matrix.arch }}-setup.exe"
       - name: Detect a real Git push
         run: |
           set -euo pipefail
@@ -119,11 +119,36 @@ jobs:
         run: |
           # This commit's script against the published release, in PowerShell 7 and Windows PowerShell 5.1.
           Get-Content ./install.ps1 -Raw | Invoke-Expression
-          if (-not (Test-Path "$env:LOCALAPPDATA\GitGaze\GitGaze.exe")) { throw 'GitGaze.exe was not installed' }
-          Get-Process GitGaze -ErrorAction SilentlyContinue | Stop-Process -Force
+          $installed = Get-ChildItem "$env:LOCALAPPDATA\GitGaze\GitGaze.exe", "$env:LOCALAPPDATA\Stoke\Stoke.exe" -ErrorAction SilentlyContinue
+          if (-not $installed) { throw 'The app was not installed' }
+          Get-Process GitGaze, Stoke -ErrorAction SilentlyContinue | Stop-Process -Force
           powershell -NoProfile -ExecutionPolicy Bypass -Command 'Get-Content ./install.ps1 -Raw | Invoke-Expression'
           if ($LASTEXITCODE) { throw "Windows PowerShell install failed ($LASTEXITCODE)" }
-          Get-Process GitGaze -ErrorAction SilentlyContinue | Stop-Process -Force
+          Get-Process GitGaze, Stoke -ErrorAction SilentlyContinue | Stop-Process -Force
+      - name: Replace an installed GitGaze with this build
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          # Stoke was GitGaze until 1.1.7. Its first launch must remove GitGaze, keep the shared
+          # settings, and carry over launch at login. The previous step left the published app installed.
+          $old = "$env:LOCALAPPDATA\GitGaze\GitGaze.exe"
+          $run = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+          if (Test-Path $old) {
+            Set-ItemProperty $run -Name GitGaze -Value "`"$old`""
+            New-Item -Force -ItemType Directory "$env:APPDATA\GitGaze" | Out-Null
+            Set-Content "$env:APPDATA\GitGaze\ci-keep.txt" kept
+            Start-Process $old
+            Start-Sleep 3
+            Start-Process (Get-Item dist\*-setup.exe).FullName -ArgumentList '/S' -Wait
+            Start-Process "$env:LOCALAPPDATA\Stoke\Stoke.exe" -ArgumentList '--smoke-test' -Wait
+            for ($i = 0; $i -lt 60 -and (Test-Path $old); $i++) { Start-Sleep 1 }
+            if (Test-Path $old) { throw 'GitGaze was not uninstalled' }
+            if (Test-Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\GitGaze') { throw 'GitGaze is still listed in installed apps' }
+            if ((Get-ItemProperty $run).GitGaze) { throw 'GitGaze still launches at login' }
+            if (-not (Get-ItemProperty $run).Stoke) { throw 'Stoke does not launch at login' }
+            if (-not (Test-Path "$env:APPDATA\GitGaze\ci-keep.txt")) { throw 'Settings were deleted' }
+            Get-Process GitGaze, Stoke -ErrorAction SilentlyContinue | Stop-Process -Force
+          } else { Write-Host 'The published release is already Stoke; nothing to migrate.' }
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.platform }}-${{ matrix.arch || 'universal' }}
@@ -184,6 +209,6 @@ jobs:
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" --draft --target "$GITHUB_SHA" --title "$TAG" --notes-file dist/notes.md
           fi
-          gh release upload "$TAG" dist/GitGaze.zip dist/GitGaze.app.tar.gz dist/GitGaze-windows-x64-setup.exe \
-            dist/GitGaze-windows-arm64-setup.exe dist/appcast.xml dist/latest.json dist/SHA256SUMS --clobber
+          gh release upload "$TAG" dist/Stoke.zip dist/Stoke.app.tar.gz dist/Stoke-windows-x64-setup.exe \
+            dist/Stoke-windows-arm64-setup.exe dist/appcast.xml dist/latest.json dist/SHA256SUMS --clobber
           gh release edit "$TAG" --draft=false --latest

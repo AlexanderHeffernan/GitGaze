@@ -1,6 +1,7 @@
 // Palettes and the few fixed colours, each with a light and dark value.
 
 export const palettes = {
+  green: [[0.1, 0.5, 0.24], [0.25, 0.77, 0.39]],
   violet: [[0.43, 0.29, 0.79], [0.69, 0.61, 1]],
   coral: [[0.77, 0.25, 0.21], [1, 0.57, 0.49]],
   ice: [[0.06, 0.43, 0.64], [0.42, 0.81, 0.97]],
@@ -27,8 +28,8 @@ const css = ([r, g, b], alpha = 1) =>
     : `rgb(${Math.round(r * 255)} ${Math.round(g * 255)} ${Math.round(b * 255)} / ${alpha})`;
 
 export function accentRGB(prefs, dark) {
-  if (prefs.palette === 'custom') return parseHex(dark ? prefs.customDark : prefs.customLight) ?? [0.69, 0.32, 0.87];
-  return (palettes[prefs.palette] ?? palettes.violet)[dark ? 1 : 0];
+  if (prefs.palette === 'custom') return parseHex(dark ? prefs.customDark : prefs.customLight) ?? [0.25, 0.77, 0.39];
+  return (palettes[prefs.palette] ?? palettes.green)[dark ? 1 : 0];
 }
 
 export const accent = (prefs, dark, alpha) => css(accentRGB(prefs, dark), alpha);

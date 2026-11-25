@@ -1,4 +1,4 @@
-/* GitGaze flyout. Metrics follow the original SwiftUI design point for point. */
+/* Stoke flyout. Metrics follow the original SwiftUI design point for point. */
 :root {
   --p: 0 0 0;
   --primary: rgb(var(--p) / 0.85);
@@ -39,6 +39,7 @@ h1, h2, p { margin: 0; }
 
 header { display: flex; align-items: center; gap: 4px; padding: 11px 20px; border-bottom: 0.5px solid rgb(var(--p) / 0.05); }
 h1 { font-size: 14px; font-weight: 600; letter-spacing: -0.3px; }
+header .logo { display: flex; flex: none; margin: -3px 4px 0 -2px; }
 /* Overlay scrolling with a slim themed knob, even when the system always shows scroll bars. */
 .scroller { flex: 1; position: relative; min-height: 0; }
 main { position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden; padding: 0 22px; scrollbar-width: none; }
@@ -236,14 +237,11 @@ footer .quiet { padding: 4px 7px; }
 .art-line.short { width: 23px; background: rgb(128 128 128 / 0.15); }
 .art-dark { position: absolute; top: 0; right: 0; bottom: 0; width: 27px; background: rgb(0 0 0 / 0.55); }
 .tile-label { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 500; }
-.palettes { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; padding-top: 3px; }
+.palettes { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px 4px; padding-top: 3px; }
 .palette { display: flex; flex-direction: column; align-items: center; gap: 3px; }
 .palette:hover { box-shadow: none; }
 .swatch { width: 28px; height: 28px; border-radius: 50%; padding: 3px; display: grid; place-items: center; color: var(--background); background: linear-gradient(to bottom, color-mix(in srgb, var(--swatch) 80%, #fff), var(--swatch)) content-box; }
 .palette.selected .swatch { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--swatch) 70%, transparent); }
-.custom { padding-left: 0; }
-.custom.accent { color: var(--accent); }
-.custom-swatch { width: 13px; height: 13px; border-radius: 50%; }
 .hex-fields { display: flex; gap: 10px; }
 .hex-field { flex: 1; display: flex; flex-direction: column; gap: 6px; }
 .hex-input { display: flex; align-items: center; gap: 7px; padding: 8px; border-radius: 8px; background: rgb(var(--p) / 0.035); box-shadow: inset 0 0 0 1px rgb(var(--p) / 0.08); }
