@@ -196,6 +196,18 @@ footer .quiet { padding: 4px 7px; }
 .person-option { display: flex; align-items: center; gap: 9px; padding: 3px 0; }
 .option-name { font-size: 11px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+/* Leaderboard */
+.board { display: flex; flex-direction: column; gap: 2px; }
+.board-row { display: flex; align-items: center; gap: 7px; padding: 4px 6px; margin: 0 -6px; border-radius: 7px; }
+.board-row.viewer { background: rgb(var(--accent-rgb) / 0.08); }
+.board-rank { width: 16px; flex: none; text-align: right; font: 500 10px ui-rounded, -apple-system, system-ui, "Segoe UI", sans-serif; color: var(--secondary); font-variant-numeric: tabular-nums; }
+.board-row:nth-child(-n+3) .board-rank { color: var(--accent); }
+.board-name { flex: none; width: 124px; text-align: left; padding: 4px 5px; font-size: 10px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+.board-bar { flex: 1; height: 4px; border-radius: 2px; background: rgb(var(--p) / 0.05); overflow: hidden; }
+.board-bar span { display: block; height: 100%; border-radius: 2px; background: rgb(var(--accent-rgb) / 0.7); }
+.board-row.viewer .board-bar span { background: var(--accent); }
+.board-count { width: 34px; flex: none; text-align: right; font: 500 11px ui-rounded, -apple-system, system-ui, "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; }
+
 /* Gallery, welcome, loading */
 .gallery { display: flex; flex-direction: column; gap: 14px; padding: 16px 0; }
 .gallery-item { display: block; width: 100%; padding: 0 14px 4px; background: rgb(var(--accent-rgb) / 0.045); box-shadow: inset 0 0 0 1px rgb(var(--p) / 0.075); }

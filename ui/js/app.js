@@ -8,13 +8,14 @@ import { offset, weekStart } from './stats.js';
 import { palettes, title, parseHex, accent, gold, background, systemDark, accentRGB } from './theme.js';
 import { figures, drawLabel, drawTrayIcon, tooltip, menuStyles } from './status.js';
 import { displayName } from './github.js';
+import { periods, memberLimit } from './leaderboard.js';
 
 const store = new Store();
 window.gitgaze = store; // For debugging and UI tests.
 
 const num = value => value.toLocaleString();
 const shortDate = date => date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-const configurable = ['favourites', 'people', 'streak', 'heatmap', 'years'];
+const configurable = ['favourites', 'people', 'streak', 'heatmap', 'years', 'leaderboard'];
 
 // ----- Small controls -----
 
@@ -250,6 +251,33 @@ function PeopleSettings() {
   </div>`;
 }
 
+/** Members ranked by contributions to the organisation's repositories this period. */
+function LeaderboardCard() {
+  const [limit, setLimit] = useState(10);
+  const { organizations, result, loading, error } = store.board;
+  const period = periods.find(([key]) => key === store.prefs.leaderboardPeriod)?.[1] ?? 'Week';
+  const viewer = store.dashboard.profile.person.login;
+  const rows = result?.rows ?? [];
+  const maximum = Math.max(1, ...rows.map(row => row.count));
+  const body = () => {
+    if (error && !rows.length) return html`<div class="small gold">${error}</div>`;
+    if (organizations && !organizations.length) return html`<div class="empty-people secondary">You aren’t a member of any GitHub organisations.</div>`;
+    if (!result) return html`<div class="empty-people secondary">${loading ? 'Loading the leaderboard…' : 'Refresh to load the leaderboard.'}</div>`;
+    return html`<div class="board">${rows.slice(0, limit).map(row => html`
+      <div class=${`board-row ${row.login.toLowerCase() === viewer.toLowerCase() ? 'viewer' : ''}`} key=${row.login}>
+        <span class="board-rank">${row.rank}</span><${Avatar} person=${row} size=${21} />
+        <button class="quiet link board-name" onClick=${() => openURL(`https://github.com/${row.login}`)} title=${`Open ${row.login} on GitHub`}>${displayName(row)}</button>
+        <span class="board-bar"><span style=${{ width: `${(row.count / maximum) * 100}%` }} /></span>
+        <span class="board-count">${num(row.count)}</span></div>`)}</div>
+      ${rows.length > limit && html`<button class="quiet more" onClick=${() => setLimit(limit + 10)}>Show more</button>`}
+      ${result.partial && html`<div class="tiny secondary">Ranked from the first ${memberLimit} of ${num(result.total)} members.</div>`}`;
+  };
+  return html`<${Card}><div class="row"><${Heading}>LEADERBOARD<//><span class="spacer" />
+    <span class="caption">${result ? `${result.organization.name || result.organization.login} · ${period}` : period}</span></div>
+    ${error && rows.length > 0 && html`<div class="small gold">${error}</div>`}
+    ${body()}<//>`;
+}
+
 function WidgetContent({ module }) {
   const { stats } = store;
   if (!stats || !store.dashboard) return null;
@@ -262,6 +290,7 @@ function WidgetContent({ module }) {
     case 'momentum': return html`<${MomentumCard} stats=${stats} />`;
     case 'records': return html`<${RecordsCard} stats=${stats} />`;
     case 'years': return html`<${YearCard} stats=${stats} />`;
+    case 'leaderboard': return html`<${LeaderboardCard} />`;
   }
 }
 
@@ -279,6 +308,17 @@ function WidgetOptions({ module }) {
       return html`<div class="year-options"><${ChoiceMenu} label="Compare with" value=${years.includes(prefs.comparisonYear) ? prefs.comparisonYear : 0}
         options=${[[0, 'Previous year'], ...years.map(y => [y, String(y)])]} onChange=${y => store.set({ comparisonYear: y })} />
         <${ChoiceStrip} label="Period" value=${prefs.comparisonMode} options=${[['ytd', 'Same point in year'], ['full', 'Full years']]} onChange=${m => store.set({ comparisonMode: m })} /></div>`;
+    }
+    case 'leaderboard': {
+      const organizations = store.board.organizations ?? [];
+      const current = organizations.find(o => o.login === prefs.leaderboardOrg)?.login ?? organizations[0]?.login ?? '';
+      const choose = patch => { store.set(patch); void store.loadLeaderboard(); };
+      return html`<div class="year-options">
+        ${organizations.length ? html`<${ChoiceMenu} label="Organisation" value=${current}
+          options=${organizations.map(o => [o.login, o.name || o.login])} onChange=${login => choose({ leaderboardOrg: login })} />`
+          : html`<div class="small secondary">${store.board.loading ? 'Finding your organisations…' : 'No organisations found for this account.'}</div>`}
+        <${ChoiceStrip} label="Period" value=${prefs.leaderboardPeriod} options=${periods} onChange=${period => choose({ leaderboardPeriod: period })} />
+        <div class="tiny secondary">Counts commits, pull requests, reviews and issues in the organisation’s repositories that are visible to you.</div></div>`;
     }
   }
   return null;
