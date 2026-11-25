@@ -110,8 +110,7 @@ function render() {
 /** Hangs the popover under the label, or above the tray icon, as the native shell does. */
 function place() {
   const box = stage.getBoundingClientRect();
-  const zoom = parseFloat(stage.style.zoom) || 1;
-  const width = stage.clientWidth;
+  const width = stage.clientWidth, zoom = box.width / stage.offsetWidth || 1;
   const item = (platform === 'macos' ? $('#menu-item') : $('#tray-item')).getBoundingClientRect();
   // Positions are relative to the stage's padding box, inside its border.
   const center = (item.left + item.width / 2 - box.left) / zoom - stage.clientLeft;
@@ -127,6 +126,8 @@ function place() {
 /**
  * Scales the desktop so it fits the column on phones and, beside the copy, fits the window's
  * height together with its controls, so the whole demo shows without scrolling.
+ * It scales with a transform, not CSS zoom: Safari draws zoomed iframes at the wrong size,
+ * leaving white boxes where the app and the celebration overlay should be.
  */
 function fit() {
   const demo = stage.parentElement, height = 692;
@@ -137,7 +138,14 @@ function fit() {
     const below = $('.controls').offsetHeight + parseFloat(getComputedStyle(demo).rowGap) + parseFloat(style.paddingBottom);
     zoom = Math.min(zoom, Math.max(0.6, (innerHeight - top - below) / height));
   }
-  stage.style.zoom = zoom < 1 ? zoom.toFixed(3) : '';
+  const scaled = zoom < 1, width = Math.min(560, demo.clientWidth / zoom);
+  // Negative margins shrink the stage's footprint to its scaled size.
+  Object.assign(stage.style, {
+    transform: scaled ? `scale(${zoom.toFixed(3)})` : '', transformOrigin: 'top center',
+    width: scaled ? `${width}px` : '', maxWidth: scaled ? 'none' : '',
+    marginInline: scaled ? `${(width * zoom - width) / 2}px` : '',
+    marginBottom: scaled ? `${height * zoom - height}px` : '',
+  });
   place();
 }
 addEventListener('resize', fit);
