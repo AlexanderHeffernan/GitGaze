@@ -139,7 +139,7 @@
     const people = orderedPeople().filter(p => !favouritesOnly || prefs.favourites.includes(p.login));
     if (!people.length) return text('Choose people in this widget’s settings.', 'secondary yearly-empty');
     const rows = people.slice(0, peopleLimit).map(person => {
-      const { login } = person, profile = data.people?.[login];
+      const { login } = person, profile = data.people && Object.hasOwn(data.people, login) ? data.people[login] : null;
       const key = `${favouritesOnly}|${login}`, expanded = expandedPeople.has(key);
       const toggle = () => { if (expanded) expandedPeople.delete(key); else expandedPeople.add(key); render(); };
       const name = group('person-name', text(login[0].toUpperCase(), 'avatar'), text(person.name || login, 'person-title'));

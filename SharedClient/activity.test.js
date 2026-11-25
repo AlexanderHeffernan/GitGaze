@@ -4,6 +4,37 @@ const core = require('./core');
 const { activity } = require('./activity');
 const { dashboard } = require('./fixture.json');
 
+test('show more fetches the next sorted people and drops late profiles after failed verification', async () => {
+  let fail = false, release;
+  const requested = [], nodes = Array.from({ length:14 }, (_, i) => ({ login:`person-${String(i).padStart(2, '0')}` })).reverse();
+  const profile = login => ({ login, name:null, avatarUrl:'', contributionsCollection:{ contributionYears:[],
+    restrictedContributionsCount:0, contributionCalendar:{ totalContributions:0, weeks:[] } } });
+  const engine = activity({ core, onChange() {}, async request(method, args) {
+    if (method === 'readLocal') return { preferences:{} };
+    if (method !== 'github') return;
+    if (args.operation === 'viewer') {
+      if (fail) throw new Error('Access denied');
+      return { viewer:profile('account') };
+    }
+    if (args.operation === 'following') return { viewer:{ following:{ nodes, pageInfo:{ hasNextPage:false } } } };
+    const login = args.variables.login;
+    requested.push(login);
+    if (login === 'person-13') return new Promise(resolve => { release = () => resolve({ user:profile(login) }); });
+    return { user:profile(login) };
+  } });
+  await engine.start();
+  assert.deepEqual(requested, nodes.toReversed().slice(0, 12).map(p => p.login));
+  await engine.loadPeople(13);
+  assert.equal(engine.snapshot().dashboard.people['person-12'].person.login, 'person-12');
+  const late = engine.loadPeople(14);
+  assert.equal(requested.at(-1), 'person-13');
+  fail = true;
+  await engine.refresh({ force:true });
+  release();
+  await late;
+  assert.equal(engine.snapshot().dashboard.people['person-13'], undefined);
+});
+
 test('offline cache survives, then a verified switch never carries the old history or people forward', async () => {
   let offline = true, now = new Date(2024, 2, 4, 12), viewers = 0;
   const observed = [], writes = [], cursors = [];

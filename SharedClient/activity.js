@@ -26,12 +26,12 @@
       if (pending || peopleBusy || !knownViewer || !dashboard) return;
       const scope = generation;
       const names = [...new Set([...core.orderPeople(dashboard.following, prefs).slice(0, peopleLimit).map(p => p.login),
-        ...prefs.favourites.filter(login => dashboard.following.some(p => p.login === login))])].filter(login => !dashboard.people[login]);
+        ...prefs.favourites.filter(login => dashboard.following.some(p => p.login === login))])].filter(login => !Object.hasOwn(dashboard.people, login));
       peopleRequested = false;
       if (!names.length) return;
       peopleBusy = true;
       try {
-        const added = {};
+        const added = Object.create(null);
         for (let i = 0; i < names.length; i += 4) {
           if (scope !== generation) return;
           await Promise.all(names.slice(i, i + 4).map(async login => {
@@ -95,7 +95,7 @@
             after = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
           } while (after);
           const accounts = [...new Set([...core.orderPeople(following, prefs).slice(0, peopleLimit).map(p => p.login), ...prefs.favourites.filter(login => following.some(p => p.login === login))])];
-          const people = { ...dashboard.people };
+          const people = Object.assign(Object.create(null), dashboard.people);
           for (let i = 0; i < accounts.length; i += 4) {
             await Promise.all(accounts.slice(i, i + 4).map(async login => {
               const node = (await query('profile', { login })).user;
